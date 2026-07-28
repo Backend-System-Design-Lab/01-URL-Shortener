@@ -1,0 +1,12 @@
+.git
+.github
+.gradle
+build
+.idea
+*.iml
+.DS_Store
+
+README.md
+docs
+k6
+monitoring
