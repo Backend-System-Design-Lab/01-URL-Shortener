@@ -1,13 +1,13 @@
-package com.backendsystemdesignlab.template;
+package com.backendsystemdesignlab.urlshortener;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class SystemDesignTemplateApplication {
+public class UrlShortenerApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(SystemDesignTemplateApplication.class, args);
+		SpringApplication.run(UrlShortenerApplication.class, args);
 	}
 
 }
