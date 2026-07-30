@@ -13,11 +13,9 @@ services:
       APP_NAME: ${APP_NAME:-url-shortener}
       VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
 
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-url_shortener}
-      DB_USERNAME: ${DB_USERNAME:-url_shortener}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-url_shortener}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-url_shortener}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
 
     depends_on:
       mysql:
@@ -25,13 +23,13 @@ services:
 
     healthcheck:
       test:
-        - CMD
-        - curl
-        - -fsS
-        - http://localhost:8080/actuator/health
-      interval: 10s
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p$$MYSQL_ROOT_PASSWORD"
+        ]
+      interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 20
       start_period: 20s
 
   mysql:
