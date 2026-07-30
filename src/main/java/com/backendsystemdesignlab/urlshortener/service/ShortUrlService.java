@@ -29,6 +29,28 @@ public class ShortUrlService {
         return base62Encoder.encode(savedShortUrl.getId());
     }
 
+    @Transactional(readOnly = true)
+    public String getLongUrl(String shortCode) {
+        long id;
+
+        try {
+            id = base62Encoder.decode(shortCode);
+        } catch (IllegalArgumentException | ArithmeticException exception) {
+            throw shortUrlNotFoundException();
+        }
+
+        return shortUrlRepository.findById(id)
+                .map(ShortUrl::getLongUrl)
+                .orElseThrow(this::shortUrlNotFoundException);
+    }
+
+    private ResponseStatusException shortUrlNotFoundException() {
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "단축 URL을 찾을 수 없습니다."
+        );
+    }
+
     private void validateUrl(String longUrl) {
         try {
             URI uri = URI.create(longUrl);
