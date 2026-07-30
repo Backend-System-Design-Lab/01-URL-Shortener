@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      DB_NAME: url_shortener
+      DB_USERNAME: url_shortener
+      DB_PASSWORD: ci-test-password
+      MYSQL_ROOT_PASSWORD: ci-root-password
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
