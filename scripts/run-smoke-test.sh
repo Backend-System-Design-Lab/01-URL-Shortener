@@ -4,7 +4,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-docker compose up -d app prometheus grafana
+TEST_FILE="${1:-smoke-test.js}"
 
-docker compose --profile test run --rm k6 \
-  run /scripts/smoke-test.js
+docker compose up -d --wait app prometheus grafana
+
+docker compose --profile test run --rm \
+  -e VUS="${VUS:-1}" \
+  -e DURATION="${DURATION:-10s}" \
+  k6 run "/scripts/${TEST_FILE}"
