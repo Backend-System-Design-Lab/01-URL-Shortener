@@ -24,12 +24,14 @@ services:
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p$$MYSQL_ROOT_PASSWORD"
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8080/actuator/health"
         ]
-      interval: 5s
+      interval: 10s
       timeout: 3s
-      retries: 20
+      retries: 5
       start_period: 20s
 
   mysql:
