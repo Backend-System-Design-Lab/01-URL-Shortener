@@ -65,7 +65,7 @@ jobs:
         run: docker compose --profile test config
 
       - name: Build application image
-        run: docker compose build --no-cache app
+        run: docker compose build app
 
       - name: Start application container
         run: docker compose up -d mysql app
