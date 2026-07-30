@@ -1,4 +1,4 @@
-package com.backendsystemdesignlab.template.api;
+package com.backendsystemdesignlab.urlshortener.ping;
 
 public record PingResponse(String message) {
 

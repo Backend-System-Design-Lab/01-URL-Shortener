@@ -1,4 +1,4 @@
-package com.backendsystemdesignlab.template.api;
+package com.backendsystemdesignlab.urlshortener.ping;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,0 +1,4 @@
+Project slug: url-shortener
+Display name: URL Shortener
+Package name: com.backendsystemdesignlab.urlshortener
+Application class: UrlShortenerApplication

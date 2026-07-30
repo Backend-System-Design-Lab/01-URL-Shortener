@@ -4,25 +4,59 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    image: system-design-template:local
+    image: url-shortener:local
 
     ports:
       - "${APP_PORT:-8080}:8080"
 
     environment:
-      APP_NAME: ${APP_NAME:-system-design-template}
+      APP_NAME: ${APP_NAME:-url-shortener}
       VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
+
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-url_shortener}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-url_shortener}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+
+    depends_on:
+      mysql:
+        condition: service_healthy
 
     healthcheck:
       test:
-        - CMD
-        - curl
-        - -fsS
-        - http://localhost:8080/actuator/health
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8080/actuator/health"
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 20s
+
+  mysql:
+      image: mysql:8.4
+      environment:
+        MYSQL_DATABASE: url_shortener
+        MYSQL_USER: url_shortener
+        MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+        MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+
+      ports:
+        - "3306:3306"
+
+      volumes:
+        - mysql-data:/var/lib/mysql
+
+      healthcheck:
+        test:
+          [
+            "CMD-SHELL",
+            "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"
+          ]
+        interval: 5s
+        timeout: 3s
+        retries: 10
 
   prometheus:
     image: prom/prometheus:v3.13.0
@@ -80,5 +114,6 @@ services:
         condition: service_healthy
 
 volumes:
+  mysql-data:
   prometheus-data:
   grafana-data:
