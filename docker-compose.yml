@@ -25,34 +25,28 @@ services:
       start_period: 20s
 
   mysql:
-    image: mysql:8.4
-    environment:
-      MYSQL_DATABASE: url_shortener
-      MYSQL_USER: url_shortener
-      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      image: mysql:8.4
+      environment:
+        MYSQL_DATABASE: url_shortener
+        MYSQL_USER: url_shortener
+        MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+        MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+
       ports:
         - "3306:3306"
+
       volumes:
         - mysql-data:/var/lib/mysql
+
       healthcheck:
         test:
           [
-            "CMD",
-            "mysqladmin",
-            "ping",
-            "-h",
-            "localhost",
-            "-uroot",
-            "-proot"
+            "CMD-SHELL",
+            "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"
           ]
         interval: 5s
         timeout: 3s
         retries: 10
-
-  volumes:
-    mysql-data:
-
 
   prometheus:
     image: prom/prometheus:v3.13.0
@@ -110,5 +104,6 @@ services:
         condition: service_healthy
 
 volumes:
+  mysql-data:
   prometheus-data:
   grafana-data:
