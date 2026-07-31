@@ -195,6 +195,41 @@ Redis 조회
 
 따라서 부하 테스트 구간에서는 대부분의 요청이 MySQL 조회 없이 처리된 것을 확인했다.
 
+### Redis 100 VU 서버 지표
+
+애플리케이션과 Redis를 초기화한 뒤 100 VU로 1분간 부하 테스트를 수행했다.
+
+| 지표 | 결과 |
+|---|---:|
+| Cache Hit | 859,174 |
+| Cache Miss | 1 |
+| Cache Hit Ratio | 약 99.9999% |
+| DB Lookup | 1 |
+| Process CPU 최대 | 약 65% |
+| Process CPU 지속 구간 | 약 38~40% |
+| JVM Heap 최대 | 약 200MiB |
+| JVM Live Threads 최대 | 약 121 |
+| HikariCP Pending | 관찰되지 않음 |
+| 5xx 오류율 | 0% |
+
+최초 리다이렉트 요청에서 Cache Miss와 DB 조회가 각각 1회 발생했고,
+이후 반복 요청은 Redis Cache Hit로 처리됐다.
+
+Prometheus 수집 시점에서는 HikariCP 활성 및 대기 연결이 관찰되지 않았다.
+다만 최초 DB 조회가 수집 간격 사이에 종료됐을 수 있으므로,
+HikariCP 사용이 전혀 없었다고 단정하지 않고 DB Lookup Counter를 기준으로 판단했다.
+
+부하 구간에서 CPU 사용률과 JVM Live Thread 수가 증가했으며,
+Heap은 증가 후 GC 수행에 따라 감소하는 흐름을 보였다.
+
+\* HikariCP: Spring Boot가 MySQL 연결을 관리하는 커넥션 풀, 미리 DB 연결을 만들어 두고 빌려 쓰는 방식 
+
+#### Grafana 측정 결과
+
+![Redis 100 VU 성능 지표](images/redis-100vu-performance.png)
+
+![Redis 100 VU 캐시 및 DB 지표](images/redis-100vu-cache-db.png)
+
 ## 12. 결과 분석
 
 Redis 적용 후 모든 VU 구간에서 실패율 0%와 Check 성공률 100%를 유지했다.
