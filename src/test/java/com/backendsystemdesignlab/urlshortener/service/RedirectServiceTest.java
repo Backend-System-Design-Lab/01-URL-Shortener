@@ -3,6 +3,7 @@ package com.backendsystemdesignlab.urlshortener.service;
 import com.backendsystemdesignlab.urlshortener.cache.ShortUrlCache;
 import com.backendsystemdesignlab.urlshortener.encoding.Base62Encoder;
 import com.backendsystemdesignlab.urlshortener.exception.ShortUrlNotFoundException;
+import com.backendsystemdesignlab.urlshortener.metrics.RedirectMetrics;
 import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
 import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,8 @@ class RedirectServiceTest {
     private ShortUrlRepository shortUrlRepository;
     @Mock
     private Base62Encoder base62Encoder;
+    @Mock
+    private RedirectMetrics redirectMetrics;
 
     @Test
     void 캐시에_URL이_있으면_DB를_조회하지_않는다() {
