@@ -1,5 +1,6 @@
 package com.backendsystemdesignlab.urlshortener.controller;
 
+import com.backendsystemdesignlab.urlshortener.service.RedirectService;
 import com.backendsystemdesignlab.urlshortener.service.ShortUrlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,13 +17,13 @@ import java.net.URI;
 @RequestMapping("/api/v1")
 public class RedirectController {
 
-    private final ShortUrlService shortUrlService;
+    private final RedirectService redirectService;
 
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirect(
             @PathVariable String shortCode
     ) {
-        String longUrl = shortUrlService.getLongUrl(shortCode);
+        String longUrl = redirectService.findLongUrl(shortCode);
 
         return ResponseEntity
                 .status(HttpStatus.FOUND) // 302 FOUND

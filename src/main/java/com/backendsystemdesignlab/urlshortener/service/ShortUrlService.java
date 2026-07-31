@@ -1,6 +1,7 @@
 package com.backendsystemdesignlab.urlshortener.service;
 
 import com.backendsystemdesignlab.urlshortener.encoding.Base62Encoder;
+import com.backendsystemdesignlab.urlshortener.exception.ShortUrlNotFoundException;
 import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
 import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,19 +37,12 @@ public class ShortUrlService {
         try {
             id = base62Encoder.decode(shortCode);
         } catch (IllegalArgumentException | ArithmeticException exception) {
-            throw shortUrlNotFoundException();
+            throw new ShortUrlNotFoundException();
         }
 
         return shortUrlRepository.findById(id)
                 .map(ShortUrl::getLongUrl)
-                .orElseThrow(this::shortUrlNotFoundException);
-    }
-
-    private ResponseStatusException shortUrlNotFoundException() {
-        return new ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "단축 URL을 찾을 수 없습니다."
-        );
+                .orElseThrow(ShortUrlNotFoundException::new);
     }
 
     private void validateUrl(String longUrl) {

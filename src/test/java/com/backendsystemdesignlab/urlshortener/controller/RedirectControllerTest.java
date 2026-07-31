@@ -1,5 +1,6 @@
 package com.backendsystemdesignlab.urlshortener.controller;
 
+import com.backendsystemdesignlab.urlshortener.service.RedirectService;
 import com.backendsystemdesignlab.urlshortener.service.ShortUrlService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,10 +25,13 @@ class RedirectControllerTest {
     @MockitoBean
     private ShortUrlService shortUrlService;
 
+    @MockitoBean
+    private RedirectService redirectService;
+
     @Test
     @DisplayName("단축 URL 요청 시 원본 URL로 302 리다이렉트한다")
     void redirect() throws Exception {
-        given(shortUrlService.getLongUrl("2TX"))
+        given(redirectService.findLongUrl("2TX"))
                 .willReturn("https://www.google.com");
 
         mockMvc.perform(get("/api/v1/2TX"))
@@ -41,7 +45,7 @@ class RedirectControllerTest {
     @Test
     @DisplayName("존재하지 않는 단축 URL은 404를 반환한다")
     void redirectNotFound() throws Exception {
-        given(shortUrlService.getLongUrl("missing"))
+        given(redirectService.findLongUrl("missing"))
                 .willThrow(new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "단축 URL을 찾을 수 없습니다."
