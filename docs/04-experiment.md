@@ -46,7 +46,7 @@ MySQL만 사용하는 초기 리다이렉트 구조에서 VU 증가에 따라 �
 | k6 | 2.1.0 |
 | Prometheus | 3.13.0 |
 | Grafana | 13.1.1 |
-| CPU / Memory | 미기록 |
+| 서버 지표 | 100 VU 실험에서 Prometheus·Grafana로 기록 |
 
 ## 6. 부하 테스트 시나리오
 
@@ -94,23 +94,20 @@ MySQL만 사용하는 초기 리다이렉트 구조에서 VU 증가에 따라 �
 - HikariCP 활성·대기 연결
 - MySQL 조회량
 
-서버 지표는 이번 측정에서 별도로 기록하지 않았다.
+CPU, JVM, HikariCP, DB Lookup 지표는 100 VU 비교 실험에서 기록했다.
 
 ### Redis 적용 후 추가 지표
 
 - 캐시 Hit 수
 - 캐시 Miss 수
 - 캐시 Hit Ratio
-- Redis 명령 처리량
 - MySQL 조회 횟수 변화
 
 ## 8. Warm-up
 
-- Baseline: 별도 Warm-up 미실행
-- Redis: `setup()`에서 리다이렉트를 한 번 호출해 캐시 저장
-- 측정 제외 구간: URL 생성 요청과 캐시 Warm-up 요청
-- 실제 측정 요청: Redis Cache Hit 상태
-- 한계: Baseline과 Redis의 Warm-up 조건이 완전히 동일하지 않아 최종 비교 시 재측정이 필요하다.
+- DB Only: 별도 Warm-up 없음
+- Redis: `setup()`에서 최초 조회로 캐시 저장
+- URL 생성과 Redis Warm-up 요청은 측정 구간에서 제외
 
 ## 9. Baseline 결과
 
@@ -179,52 +176,43 @@ Redis 조회
 | 100 | p95 | 32.96ms | 11.93ms | 63.80% 감소 |
 | 100 | p99 | 49.88ms | 21.52ms | 56.86% 감소 |
 
-### 캐시 동작 확인
+### 100 VU 서버 지표 비교
 
-100 VU 부하 테스트 후 Micrometer 지표를 확인했다.
+캐시 활성화 여부만 변경한 동일한 코드에서 100 VU로 1분간 측정했다.
 
-| 지표 | 결과 |
-|---|---:|
-| Cache Hit | 955,178 |
-| Cache Miss | 1 |
-| Cache Hit Ratio | 약 99.9999% |
-| DB Lookup | 1 |
+| 지표 | DB Only | Redis |
+|---|---:|---:|
+| DB Lookup | 366,248 | 1 |
+| Cache Hit Ratio | 0% | 약 100% |
+| Process CPU 최대 | 약 74% | 약 49% |
+| JVM Heap 최대 | 약 160MiB | 약 192MiB |
+| JVM Live Threads 최대 | 약 121 | 약 125 |
+| HikariCP Active 최대 | 약 10 | 관찰되지 않음 |
+| HikariCP Pending 최대 | 약 85 | 관찰되지 않음 |
+| 5xx 오류율 | 0% | 0% |
 
-`setup()`에서 수행한 첫 조회는 Cache Miss로 MySQL을 조회했고,
-이후 반복 요청은 Redis Cache Hit로 처리됐다.
+DB Only에서는 k6 iterations와 DB Lookup이 모두 366,248건으로 일치했다.
+모든 리다이렉트 요청이 MySQL을 조회한 것이다.
 
-따라서 부하 테스트 구간에서는 대부분의 요청이 MySQL 조회 없이 처리된 것을 확인했다.
+HikariCP Active는 기본 최대 연결 수인 10개에 도달했고,
+Pending 요청도 약 85개까지 증가했다.
+DB 커넥션 대기가 p95와 p99 증가의 주요 원인으로 나타났다.
 
-### Redis 100 VU 서버 지표
+Redis 적용 후에는 최초 요청에서만 DB를 조회했고,
+이후 요청은 Cache Hit로 처리됐다.
+Prometheus 수집 시점에서는 HikariCP 연결 사용과 대기가 관찰되지 않았다.
 
-애플리케이션과 Redis를 초기화한 뒤 100 VU로 1분간 부하 테스트를 수행했다.
-
-| 지표 | 결과 |
-|---|---:|
-| Cache Hit | 859,174 |
-| Cache Miss | 1 |
-| Cache Hit Ratio | 약 99.9999% |
-| DB Lookup | 1 |
-| Process CPU 최대 | 약 65% |
-| Process CPU 지속 구간 | 약 38~40% |
-| JVM Heap 최대 | 약 200MiB |
-| JVM Live Threads 최대 | 약 121 |
-| HikariCP Pending | 관찰되지 않음 |
-| 5xx 오류율 | 0% |
-
-최초 리다이렉트 요청에서 Cache Miss와 DB 조회가 각각 1회 발생했고,
-이후 반복 요청은 Redis Cache Hit로 처리됐다.
-
-Prometheus 수집 시점에서는 HikariCP 활성 및 대기 연결이 관찰되지 않았다.
-다만 최초 DB 조회가 수집 간격 사이에 종료됐을 수 있으므로,
-HikariCP 사용이 전혀 없었다고 단정하지 않고 DB Lookup Counter를 기준으로 판단했다.
-
-부하 구간에서 CPU 사용률과 JVM Live Thread 수가 증가했으며,
-Heap은 증가 후 GC 수행에 따라 감소하는 흐름을 보였다.
-
-\* HikariCP: Spring Boot가 MySQL 연결을 관리하는 커넥션 풀, 미리 DB 연결을 만들어 두고 빌려 쓰는 방식 
+> HikariCP는 애플리케이션이 MySQL 연결을 미리 생성하고 빌려 쓰도록 관리하는 커넥션 풀이다.
 
 #### Grafana 측정 결과
+
+**DB Only**
+
+![DB Only 100 VU 성능 지표](images/db-only-100vu-performance.png)
+
+![DB Only 100 VU DB 및 커넥션 풀 지표](images/db-only-100vu-db-pool.png)
+
+**Redis**
 
 ![Redis 100 VU 성능 지표](images/redis-100vu-performance.png)
 
@@ -232,13 +220,15 @@ Heap은 증가 후 GC 수행에 따라 감소하는 흐름을 보였다.
 
 ## 12. 결과 분석
 
-Redis 적용 후 모든 VU 구간에서 실패율 0%와 Check 성공률 100%를 유지했다.
+Redis 적용 후 모든 VU 구간에서 실패율 0%를 유지하면서 처리량이 증가하고 p95와 p99가 감소했다.
 
-20 VU에서는 RPS가 약 65% 증가했고 p95는 약 35% 감소했다. 50 VU와 100 VU에서는 RPS가 두 배 이상으로 증가했으며 p95와 p99도 약 56~64% 감소했다.
+100 VU 서버 지표에서 DB Only는 모든 요청마다 MySQL을 조회했다.
+HikariCP의 10개 커넥션이 모두 사용됐고 최대 약 85개의 요청이 커넥션을 기다렸다.
 
-따라서 반복 조회가 많은 환경에서는 Redis Cache Hit를 통해 MySQL 조회를 생략하는 방식이 처리량과 응답 지연 개선에 효과적이었다.
+Redis 적용 후에는 최초 1회를 제외한 요청이 Cache Hit로 처리됐다.
+DB 조회와 커넥션 대기가 제거되면서 응답 지연이 감소하고 처리량이 증가했다.
 
-다만 이번 테스트는 고정 VU 방식이므로 응답이 빨라지면 같은 시간 동안 더 많은 요청을 보내게 된다. 또한 CPU, HikariCP, MySQL 조회량을 기록하지 않았으므로 DB 부하가 실제로 얼마나 감소했는지는 추가 측정이 필요하다.
+따라서 반복 조회가 많은 리다이렉트 경로에서는 Redis Cache Aside가 DB 접근과 커넥션 풀 병목을 줄이는 데 효과적이었다.
 
 ## 13. Platform Thread와 Virtual Thread 비교
 
@@ -270,19 +260,24 @@ VIRTUAL_THREADS_ENABLED=true
 
 ## 14. 실험 한계
 
-- 로컬 Docker 환경에서 테스트했다.
-- k6, 애플리케이션, MySQL이 같은 장비의 자원을 사용한다.
+- 로컬 Docker 환경에서 실행했다.
+- k6, 애플리케이션, MySQL, Redis가 같은 장비의 자원을 사용했다.
 - 조건별 테스트를 한 번씩만 수행했다.
 - 테스트 시간이 조건별 1분으로 짧다.
-- CPU, JVM, HikariCP, MySQL 지표를 기록하지 않았다.
-- 동일한 단축 URL 하나만 반복 조회했다.
-- 별도의 Warm-up 조건을 적용하지 않았다.
+- 하나의 단축 URL만 반복 조회했다.
+- Prometheus 수집 간격 사이의 짧은 HikariCP 사용은 그래프에서 누락될 수 있다.
+- 고정 VU 방식이므로 응답 시간이 짧을수록 같은 시간에 더 많은 요청을 전송한다.
 
 ## 15. 후속 실험
 
 - [x] Redis Cache Aside 적용
-- [x] 동일한 조건으로 Redis 적용 전후 비교
-- [ ] Prometheus와 Grafana 서버 지표 기록
+- [x] Redis 적용 전후 부하 테스트
+- [x] Prometheus·Grafana 서버 지표 비교
+- [x] 캐시 ON/OFF 환경변수 적용
 - [ ] 조건별 3회 측정 후 중앙값 비교
 - [ ] Platform Thread와 Virtual Thread 비교
 - [ ] 더 높은 VU로 Stress Test 수행
+- [ ] 단축 코드 생성 전략 비교
+  - Sequence ID + Base62
+  - Hash + 충돌 처리
+  - 분산 ID + Base62
