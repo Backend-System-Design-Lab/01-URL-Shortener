@@ -50,3 +50,7 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+app:
+  cache:
+    enabled: ${CACHE_ENABLED:true}
