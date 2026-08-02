@@ -42,6 +42,9 @@ dependencies {
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+
+	// Virtual Thread 전용 지표
+	implementation 'io.micrometer:micrometer-java21'
 }
 
 tasks.named('test') {
