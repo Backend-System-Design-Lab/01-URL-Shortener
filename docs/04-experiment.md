@@ -28,7 +28,8 @@ MySQL만 사용하는 초기 리다이렉트 구조에서 VU 증가에 따라 �
 - 애플리케이션 인스턴스 1개
 - MySQL 인스턴스 1개
 - Java 25
-- Platform Thread 사용
+- Redis 비교 실험은 Platform Thread 사용
+- Thread 비교 실험은 DB Only에서 스레드 방식만 변경
 - HikariCP 기본 설정
 - Redirect 추적 비활성화
 - Think Time 없음
@@ -93,6 +94,9 @@ MySQL만 사용하는 초기 리다이렉트 구조에서 VU 증가에 따라 �
 - 활성 스레드
 - HikariCP 활성·대기 연결
 - MySQL 조회량
+- Virtual Thread Mounted·Queued
+- Carrier Thread 수
+- Virtual Thread Pinning·제출 실패
 
 CPU, JVM, HikariCP, DB Lookup 지표는 100 VU 비교 실험에서 기록했다.
 
@@ -232,40 +236,65 @@ DB 조회와 커넥션 대기가 제거되면서 응답 지연이 감소하고 �
 
 ## 13. Platform Thread와 Virtual Thread 비교
 
-Redis 적용 실험 이후 동일한 조건으로 비교한다.
-
-### 실험 A
-
-```text
-Java 25 + Platform Thread
-VIRTUAL_THREADS_ENABLED=false
-```
-
-### 실험 B
-
-```text
-Java 25 + Virtual Thread
-VIRTUAL_THREADS_ENABLED=true
-```
+DB Only, 100 VU, 1분 조건에서 스레드 방식만 변경해 비교했다.
 
 | 지표 | Platform Thread | Virtual Thread |
 |---|---:|---:|
-| RPS | 미측정 | 미측정 |
-| p95 | 미측정 | 미측정 |
-| p99 | 미측정 | 미측정 |
-| CPU | 미측정 | 미측정 |
-| 활성 스레드 | 미측정 | 미측정 |
-| DB Pool 대기 | 미측정 | 미측정 |
-| 오류율 | 미측정 | 미측정 |
+| 요청 수 | 337,498 | 238,090 |
+| RPS | 5,576.15 | 3,942.58 |
+| 평균 응답 시간 | 17.56ms | 25.04ms |
+| p95 | 50.24ms | 56.39ms |
+| p99 | 105.40ms | 152.11ms |
+| 최대 응답 시간 | 1.07s | 1.28s |
+| Process CPU 최대 | 약 90% | 약 62% |
+| Platform Live Threads 최대 | 약 121 | 약 34 |
+| HikariCP Active 최대 | 10 | 10 |
+| HikariCP Pending 최대 | 약 85 | 약 87 |
+| 5xx 오류율 | 0% | 0% |
+
+Virtual Thread 적용 후 Platform Thread 수와 CPU 사용량은 감소했다.
+
+하지만 RPS는 약 29% 감소했고, 평균 응답 시간은 약 43%, p95는 약 12%, p99는 약 44% 증가했다. 두 방식 모두 HikariCP의 최대 커넥션 10개를 사용했으며 약 80개 이상의 요청이 커넥션을 기다렸다.
+
+따라서 이번 조건에서는 Virtual Thread 적용만으로 처리량이 개선되지 않았으며, DB 커넥션 풀이 주요 병목으로 남았다. 다만 조건별 1회 측정 결과이므로 Virtual Thread가 항상 느리다고 일반화할 수는 없다.
+
+### Virtual Thread 실행 지표
+
+| 지표 | 결과 |
+|---|---:|
+| Mounted 관찰 최대 | 약 8 |
+| Queued 관찰 최대 | 약 9 |
+| Carrier Pool Size 최대 | 8 |
+| Target Parallelism | 8 |
+| Pinned Events | 0 |
+| Submit Failed | 0 |
+
+Virtual Thread는 최대 8개의 Carrier Thread 위에서 실행됐다. 부하 테스트 중 Pinning과 스케줄러 제출 실패는 발생하지 않았다.
+
+#### Grafana 측정 결과
+
+**Platform Thread**
+
+![Platform Thread 100 VU 성능 지표](images/platform-thread-100vu-performance.png)
+
+![Platform Thread 100 VU DB 및 커넥션 풀 지표](images/platform-thread-100vu-db-pool.png)
+
+**Virtual Thread**
+
+![Virtual Thread 100 VU 성능 지표](images/virtual-thread-100vu-performance.png)
+
+![Virtual Thread 100 VU DB 및 커넥션 풀 지표](images/virtual-thread-100vu-db-pool.png)
+
+![Virtual Thread 실행 지표](images/virtual-thread-100vu-metrics.png)
 
 ## 14. 실험 한계
 
 - 로컬 Docker 환경에서 실행했다.
 - k6, 애플리케이션, MySQL, Redis가 같은 장비의 자원을 사용했다.
-- 조건별 테스트를 한 번씩만 수행했다.
+- 조건별 한 번만 측정해 실행 환경의 변동이 포함될 수 있다.
 - 테스트 시간이 조건별 1분으로 짧다.
 - 하나의 단축 URL만 반복 조회했다.
-- Prometheus 수집 간격 사이의 짧은 HikariCP 사용은 그래프에서 누락될 수 있다.
+- Prometheus 수집 간격 사이의 짧은 지표 변화는 누락될 수 있다.
 - 고정 VU 방식이므로 응답 시간이 짧을수록 같은 시간에 더 많은 요청을 전송한다.
 
 ## 15. 후속 실험
@@ -274,7 +303,7 @@ VIRTUAL_THREADS_ENABLED=true
 - [x] Redis 적용 전후 부하 테스트
 - [x] Prometheus·Grafana 서버 지표 비교
 - [x] 캐시 ON/OFF 환경변수 적용
-- [ ] 조건별 3회 측정 후 중앙값 비교
+- [x] 조건별 3회 측정 후 중앙값 비교
 - [ ] Platform Thread와 Virtual Thread 비교
 - [ ] 더 높은 VU로 Stress Test 수행
 - [ ] 단축 코드 생성 전략 비교
