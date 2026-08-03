@@ -1,0 +1,243 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /scripts/db-only-redirect.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m30s max duration (incl. graceful stop):
+              * default: 100 looping VUs for 1m0s (gracefulStop: 30s)
+
+
+running (0m01.0s), 100/100 VUs, 566 complete and 0 interrupted iterations
+default   [   1% ] 100 VUs  0m00.6s/1m0s
+
+running (0m02.0s), 100/100 VUs, 1557 complete and 0 interrupted iterations
+default   [   3% ] 100 VUs  0m01.6s/1m0s
+
+running (0m03.0s), 100/100 VUs, 2993 complete and 0 interrupted iterations
+default   [   4% ] 100 VUs  0m02.6s/1m0s
+
+running (0m04.0s), 100/100 VUs, 4242 complete and 0 interrupted iterations
+default   [   6% ] 100 VUs  0m03.6s/1m0s
+
+running (0m05.0s), 100/100 VUs, 4826 complete and 0 interrupted iterations
+default   [   8% ] 100 VUs  0m04.6s/1m0s
+
+running (0m06.0s), 100/100 VUs, 5234 complete and 0 interrupted iterations
+default   [   9% ] 100 VUs  0m05.6s/1m0s
+
+running (0m07.0s), 100/100 VUs, 5546 complete and 0 interrupted iterations
+default   [  11% ] 100 VUs  0m06.6s/1m0s
+
+running (0m08.0s), 100/100 VUs, 6587 complete and 0 interrupted iterations
+default   [  13% ] 100 VUs  0m07.6s/1m0s
+
+running (0m09.0s), 100/100 VUs, 8735 complete and 0 interrupted iterations
+default   [  14% ] 100 VUs  0m08.6s/1m0s
+
+running (0m10.0s), 100/100 VUs, 9644 complete and 0 interrupted iterations
+default   [  16% ] 100 VUs  0m09.6s/1m0s
+
+running (0m11.0s), 100/100 VUs, 11868 complete and 0 interrupted iterations
+default   [  18% ] 100 VUs  0m10.6s/1m0s
+
+running (0m12.0s), 100/100 VUs, 14102 complete and 0 interrupted iterations
+default   [  19% ] 100 VUs  0m11.6s/1m0s
+
+running (0m13.0s), 100/100 VUs, 16175 complete and 0 interrupted iterations
+default   [  21% ] 100 VUs  0m12.6s/1m0s
+
+running (0m14.0s), 100/100 VUs, 19073 complete and 0 interrupted iterations
+default   [  23% ] 100 VUs  0m13.6s/1m0s
+
+running (0m15.0s), 100/100 VUs, 21756 complete and 0 interrupted iterations
+default   [  24% ] 100 VUs  0m14.6s/1m0s
+
+running (0m16.0s), 100/100 VUs, 25240 complete and 0 interrupted iterations
+default   [  26% ] 100 VUs  0m15.6s/1m0s
+
+running (0m17.0s), 100/100 VUs, 28832 complete and 0 interrupted iterations
+default   [  28% ] 100 VUs  0m16.6s/1m0s
+
+running (0m18.0s), 100/100 VUs, 31357 complete and 0 interrupted iterations
+default   [  29% ] 100 VUs  0m17.6s/1m0s
+
+running (0m19.0s), 100/100 VUs, 35648 complete and 0 interrupted iterations
+default   [  31% ] 100 VUs  0m18.6s/1m0s
+
+running (0m20.0s), 100/100 VUs, 38411 complete and 0 interrupted iterations
+default   [  33% ] 100 VUs  0m19.6s/1m0s
+
+running (0m21.0s), 100/100 VUs, 42163 complete and 0 interrupted iterations
+default   [  34% ] 100 VUs  0m20.6s/1m0s
+
+running (0m22.0s), 100/100 VUs, 46834 complete and 0 interrupted iterations
+default   [  36% ] 100 VUs  0m21.6s/1m0s
+
+running (0m23.0s), 100/100 VUs, 51104 complete and 0 interrupted iterations
+default   [  38% ] 100 VUs  0m22.6s/1m0s
+
+running (0m24.0s), 100/100 VUs, 55594 complete and 0 interrupted iterations
+default   [  39% ] 100 VUs  0m23.6s/1m0s
+
+running (0m25.0s), 100/100 VUs, 60384 complete and 0 interrupted iterations
+default   [  41% ] 100 VUs  0m24.6s/1m0s
+
+running (0m26.0s), 100/100 VUs, 64476 complete and 0 interrupted iterations
+default   [  43% ] 100 VUs  0m25.6s/1m0s
+
+running (0m27.0s), 100/100 VUs, 68346 complete and 0 interrupted iterations
+default   [  44% ] 100 VUs  0m26.6s/1m0s
+
+running (0m28.0s), 100/100 VUs, 73030 complete and 0 interrupted iterations
+default   [  46% ] 100 VUs  0m27.6s/1m0s
+
+running (0m29.0s), 100/100 VUs, 78182 complete and 0 interrupted iterations
+default   [  48% ] 100 VUs  0m28.6s/1m0s
+
+running (0m30.0s), 100/100 VUs, 83316 complete and 0 interrupted iterations
+default   [  49% ] 100 VUs  0m29.6s/1m0s
+
+running (0m31.0s), 100/100 VUs, 88671 complete and 0 interrupted iterations
+default   [  51% ] 100 VUs  0m30.6s/1m0s
+
+running (0m32.0s), 100/100 VUs, 93801 complete and 0 interrupted iterations
+default   [  53% ] 100 VUs  0m31.6s/1m0s
+
+running (0m33.0s), 100/100 VUs, 98059 complete and 0 interrupted iterations
+default   [  54% ] 100 VUs  0m32.6s/1m0s
+
+running (0m34.0s), 100/100 VUs, 103590 complete and 0 interrupted iterations
+default   [  56% ] 100 VUs  0m33.6s/1m0s
+
+running (0m35.0s), 100/100 VUs, 109255 complete and 0 interrupted iterations
+default   [  58% ] 100 VUs  0m34.6s/1m0s
+
+running (0m36.0s), 100/100 VUs, 114394 complete and 0 interrupted iterations
+default   [  59% ] 100 VUs  0m35.6s/1m0s
+
+running (0m37.0s), 100/100 VUs, 119093 complete and 0 interrupted iterations
+default   [  61% ] 100 VUs  0m36.6s/1m0s
+
+running (0m38.0s), 100/100 VUs, 123853 complete and 0 interrupted iterations
+default   [  63% ] 100 VUs  0m37.6s/1m0s
+
+running (0m39.0s), 100/100 VUs, 128833 complete and 0 interrupted iterations
+default   [  64% ] 100 VUs  0m38.6s/1m0s
+
+running (0m40.0s), 100/100 VUs, 133896 complete and 0 interrupted iterations
+default   [  66% ] 100 VUs  0m39.6s/1m0s
+
+running (0m41.0s), 100/100 VUs, 138997 complete and 0 interrupted iterations
+default   [  68% ] 100 VUs  0m40.6s/1m0s
+
+running (0m42.0s), 100/100 VUs, 144410 complete and 0 interrupted iterations
+default   [  69% ] 100 VUs  0m41.6s/1m0s
+
+running (0m43.0s), 100/100 VUs, 149337 complete and 0 interrupted iterations
+default   [  71% ] 100 VUs  0m42.6s/1m0s
+
+running (0m44.0s), 100/100 VUs, 154201 complete and 0 interrupted iterations
+default   [  73% ] 100 VUs  0m43.6s/1m0s
+
+running (0m45.0s), 100/100 VUs, 159595 complete and 0 interrupted iterations
+default   [  74% ] 100 VUs  0m44.6s/1m0s
+
+running (0m46.0s), 100/100 VUs, 164948 complete and 0 interrupted iterations
+default   [  76% ] 100 VUs  0m45.6s/1m0s
+
+running (0m47.0s), 100/100 VUs, 169244 complete and 0 interrupted iterations
+default   [  78% ] 100 VUs  0m46.6s/1m0s
+
+running (0m48.0s), 100/100 VUs, 174358 complete and 0 interrupted iterations
+default   [  79% ] 100 VUs  0m47.6s/1m0s
+
+running (0m49.0s), 100/100 VUs, 179079 complete and 0 interrupted iterations
+default   [  81% ] 100 VUs  0m48.6s/1m0s
+
+running (0m50.0s), 100/100 VUs, 181655 complete and 0 interrupted iterations
+default   [  83% ] 100 VUs  0m49.6s/1m0s
+
+running (0m51.0s), 100/100 VUs, 186793 complete and 0 interrupted iterations
+default   [  84% ] 100 VUs  0m50.6s/1m0s
+
+running (0m52.0s), 100/100 VUs, 191500 complete and 0 interrupted iterations
+default   [  86% ] 100 VUs  0m51.6s/1m0s
+
+running (0m53.0s), 100/100 VUs, 195963 complete and 0 interrupted iterations
+default   [  88% ] 100 VUs  0m52.6s/1m0s
+
+running (0m54.0s), 100/100 VUs, 201488 complete and 0 interrupted iterations
+default   [  89% ] 100 VUs  0m53.6s/1m0s
+
+running (0m55.0s), 100/100 VUs, 207340 complete and 0 interrupted iterations
+default   [  91% ] 100 VUs  0m54.6s/1m0s
+
+running (0m56.0s), 100/100 VUs, 213037 complete and 0 interrupted iterations
+default   [  93% ] 100 VUs  0m55.6s/1m0s
+
+running (0m57.0s), 100/100 VUs, 218643 complete and 0 interrupted iterations
+default   [  94% ] 100 VUs  0m56.6s/1m0s
+
+running (0m58.0s), 100/100 VUs, 224268 complete and 0 interrupted iterations
+default   [  96% ] 100 VUs  0m57.6s/1m0s
+
+running (0m59.0s), 100/100 VUs, 230154 complete and 0 interrupted iterations
+default   [  98% ] 100 VUs  0m58.6s/1m0s
+
+running (1m00.0s), 100/100 VUs, 235770 complete and 0 interrupted iterations
+default   [  99% ] 100 VUs  0m59.6s/1m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{endpoint:redirect}
+    ✓ 'p(95)<500' p(95)=56.38ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 714272  11827.787159/s
+    checks_succeeded...: 100.00% 714272 out of 714272
+    checks_failed......: 0.00%   0 out of 714272
+
+    ✓ 단축 URL 생성 상태는 201이다
+    ✓ shortCode가 반환된다
+    ✓ 리다이렉트 상태는 302이다
+    ✓ Location 헤더가 존재한다
+    ✓ 원본 URL이 올바르다
+
+    HTTP
+    http_req_duration..............: avg=25.04ms min=553.12µs med=18.73ms p(90)=40.22ms p(95)=56.39ms p(99)=152.11ms max=1.28s
+      { endpoint:redirect }........: avg=25.04ms min=553.12µs med=18.73ms p(90)=40.22ms p(95)=56.38ms p(99)=152.09ms max=1.28s
+      { expected_response:true }...: avg=25.04ms min=553.12µs med=18.73ms p(90)=40.22ms p(95)=56.39ms p(99)=152.11ms max=1.28s
+    http_req_failed................: 0.00%  0 out of 238091
+    http_reqs......................: 238091 3942.60124/s
+
+    EXECUTION
+    iteration_duration.............: avg=25.19ms min=596.04µs med=18.85ms p(90)=40.39ms p(95)=56.6ms  p(99)=152.59ms max=1.28s
+    iterations.....................: 238090 3942.58468/s
+    vus............................: 100    min=100         max=100
+    vus_max........................: 100    min=100         max=100
+
+    NETWORK
+    data_received..................: 26 MB  423 kB/s
+    data_sent......................: 17 MB  284 kB/s
+
+
+
+
+running (1m00.4s), 000/100 VUs, 238090 complete and 0 interrupted iterations
+default ✓ [ 100% ] 100 VUs  1m0s
