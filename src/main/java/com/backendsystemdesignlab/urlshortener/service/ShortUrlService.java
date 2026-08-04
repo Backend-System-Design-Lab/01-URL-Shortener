@@ -1,7 +1,6 @@
 package com.backendsystemdesignlab.urlshortener.service;
 
-import com.backendsystemdesignlab.urlshortener.encoding.Base62Encoder;
-import com.backendsystemdesignlab.urlshortener.exception.ShortUrlNotFoundException;
+import com.backendsystemdesignlab.urlshortener.generator.SequenceBase62Generator;
 import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
 import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,7 @@ import java.net.URI;
 public class ShortUrlService {
 
     private final ShortUrlRepository shortUrlRepository;
-    private final Base62Encoder base62Encoder;
+    private final SequenceBase62Generator sequenceBase62Generator;
 
     @Transactional
     public String createShortUrl(String longUrl) {
@@ -27,22 +26,11 @@ public class ShortUrlService {
         ShortUrl shortUrl = ShortUrl.create(longUrl);
         ShortUrl savedShortUrl = shortUrlRepository.save(shortUrl);
 
-        return base62Encoder.encode(savedShortUrl.getId());
-    }
+        String shortCode = sequenceBase62Generator.generate(longUrl, savedShortUrl.getId());
 
-    @Transactional(readOnly = true)
-    public String getLongUrl(String shortCode) {
-        long id;
+        savedShortUrl.assignShortCode(shortCode);
 
-        try {
-            id = base62Encoder.decode(shortCode);
-        } catch (IllegalArgumentException | ArithmeticException exception) {
-            throw new ShortUrlNotFoundException();
-        }
-
-        return shortUrlRepository.findById(id)
-                .map(ShortUrl::getLongUrl)
-                .orElseThrow(ShortUrlNotFoundException::new);
+        return shortCode;
     }
 
     private void validateUrl(String longUrl) {
