@@ -7,6 +7,7 @@ import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class SequenceShortUrlCreationStrategy implements ShortUrlCreationStrateg
     private final SequenceBase62Generator sequenceBase62Generator;
 
     @Override
+    @Transactional
     public String create(String longUrl) {
         ShortUrl shortUrl = ShortUrl.create(longUrl);
         ShortUrl savedShortUrl = shortUrlRepository.save(shortUrl);

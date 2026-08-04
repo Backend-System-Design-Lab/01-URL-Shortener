@@ -25,6 +25,7 @@ public class HashShortUrlCreationStrategy implements ShortUrlCreationStrategy {
 
     private final ShortUrlRepository shortUrlRepository;
     private final HashShortCodeGenerator hashShortCodeGenerator;
+    private final ShortUrlWriter shortUrlWriter;
 
     @Override
     public String create(String longUrl) {
@@ -41,11 +42,17 @@ public class HashShortUrlCreationStrategy implements ShortUrlCreationStrategy {
             }
 
             try {
-                ShortUrl shortUrl = ShortUrl.create(shortCode, longUrl);
-                shortUrlRepository.saveAndFlush(shortUrl);
+                shortUrlWriter.save(shortCode, longUrl);
                 return shortCode;
             } catch (DataIntegrityViolationException exception) {
-                // UNIQUE 충돌이면 다음 attempt로 재시도
+                /*
+                 * findByShortCode() 이후 다른 요청이
+                 * 같은 코드를 먼저 저장했을 수 있다. (동시성)
+                 */
+                Optional<ShortUrl> concurrentResult = shortUrlRepository.findByShortCode(shortCode);
+                if (concurrentResult.isPresent() && concurrentResult.get().getLongUrl().equals(longUrl)) {
+                    return shortCode;
+                }
             }
         }
 

@@ -19,8 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.*;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -36,6 +35,9 @@ class HashShortUrlCreationStrategyTest {
     @Mock
     private HashShortCodeGenerator hashShortCodeGenerator;
 
+    @Mock
+    private ShortUrlWriter shortUrlWriter;
+
     @Test
     void 충돌이_없으면_생성한_코드로_저장한다() {
         String longUrl = "https://www.google.com";
@@ -50,15 +52,9 @@ class HashShortUrlCreationStrategyTest {
         String result = strategy.create(longUrl);
 
         assertThat(result).isEqualTo(shortCode);
-        ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
         then(hashShortCodeGenerator).should().generate(context);
         then(shortUrlRepository).should().findByShortCode(shortCode);
-        then(shortUrlRepository).should().saveAndFlush(captor.capture());
-
-        ShortUrl savedShortUrl = captor.getValue();
-
-        assertThat(savedShortUrl.getShortCode()).isEqualTo(shortCode);
-        assertThat(savedShortUrl.getLongUrl()).isEqualTo(longUrl);
+        then(shortUrlWriter).should().save(shortCode, longUrl);
     }
 
     @Test
@@ -77,7 +73,7 @@ class HashShortUrlCreationStrategyTest {
         assertThat(result).isEqualTo(shortCode);
         then(hashShortCodeGenerator).should().generate(context);
         then(shortUrlRepository).should().findByShortCode(shortCode);
-        then(shortUrlRepository).should(never()).saveAndFlush(any(ShortUrl.class));
+        then(shortUrlWriter).shouldHaveNoInteractions();
     }
 
     @Test
@@ -104,11 +100,7 @@ class HashShortUrlCreationStrategyTest {
         then(hashShortCodeGenerator).should().generate(secondContext);
         then(shortUrlRepository).should().findByShortCode(collidedCode);
         then(shortUrlRepository).should().findByShortCode(retryCode);
-
-        ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
-        then(shortUrlRepository).should().saveAndFlush(captor.capture());
-        assertThat(captor.getValue().getShortCode()).isEqualTo(retryCode);
-        assertThat(captor.getValue().getLongUrl()).isEqualTo(longUrl);
+        then(shortUrlWriter).should().save(retryCode, longUrl);
     }
 
     @Test
@@ -127,7 +119,7 @@ class HashShortUrlCreationStrategyTest {
         assertThatThrownBy(() -> strategy.create(longUrl))
                 .isInstanceOf(ShortCodeGenerationException.class);
         then(hashShortCodeGenerator).should(times(5)).generate(any(ShortCodeGenerationContext.class));
-        then(shortUrlRepository).should(never()).saveAndFlush(any(ShortUrl.class));
+        then(shortUrlWriter).shouldHaveNoInteractions();
     }
 
     @Test
@@ -142,17 +134,38 @@ class HashShortUrlCreationStrategyTest {
 
         given(hashShortCodeGenerator.generate(firstContext)).willReturn(firstCode);
         given(hashShortCodeGenerator.generate(secondContext)).willReturn(secondCode);
-        given(shortUrlRepository.findByShortCode(firstCode)).willReturn(Optional.empty());
+
+        given(shortUrlRepository.findByShortCode(firstCode)).willReturn(Optional.empty(), Optional.empty());
         given(shortUrlRepository.findByShortCode(secondCode)).willReturn(Optional.empty());
-        given(shortUrlRepository.saveAndFlush(
-                argThat(shortUrl -> firstCode.equals(shortUrl.getShortCode()))
-        )).willThrow(new DataIntegrityViolationException("short_code UNIQUE 계약조건 위반"));
+
+        willThrow(new DataIntegrityViolationException("short_code UNIQUE 제약조건 위반")).given(shortUrlWriter).save(firstCode, longUrl);
 
         String result = strategy.create(longUrl);
 
         assertThat(result).isEqualTo(secondCode);
         then(hashShortCodeGenerator).should().generate(firstContext);
         then(hashShortCodeGenerator).should().generate(secondContext);
-        then(shortUrlRepository).should(times(2)).saveAndFlush(any(ShortUrl.class));
+        then(shortUrlWriter).should().save(firstCode, longUrl);
+        then(shortUrlWriter).should().save(secondCode, longUrl);
+    }
+
+    @Test
+    void 저장_중_동일_URL이_먼저_저장되면_기존_코드를_반환한다() {
+        String longUrl = "https://www.google.com";
+        String shortCode = "abc1234";
+
+        ShortCodeGenerationContext context = ShortCodeGenerationContext.hash(longUrl,0);
+        ShortUrl concurrentlySaved = ShortUrl.create(shortCode, longUrl);
+
+        given(hashShortCodeGenerator.generate(context)).willReturn(shortCode);
+        given(shortUrlRepository.findByShortCode(shortCode)).willReturn(Optional.empty(), Optional.of(concurrentlySaved));
+
+        willThrow(new DataIntegrityViolationException("short_code UNIQUE 제약조건 위반")).given(shortUrlWriter).save(shortCode, longUrl);
+
+        String result = strategy.create(longUrl);
+
+        assertThat(result).isEqualTo(shortCode);
+        then(shortUrlRepository).should(times(2)).findByShortCode(shortCode);
+        then(shortUrlWriter).should().save(shortCode, longUrl);
     }
 }

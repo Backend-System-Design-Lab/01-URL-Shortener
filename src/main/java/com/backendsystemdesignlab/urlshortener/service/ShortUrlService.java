@@ -11,12 +11,10 @@ import java.net.URI;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ShortUrlService {
 
     private final ShortUrlCreationStrategy shortUrlCreationStrategy;
 
-    @Transactional
     public String createShortUrl(String longUrl) {
         validateUrl(longUrl);
 
