@@ -57,3 +57,6 @@ management:
 app:
   cache:
     enabled: ${CACHE_ENABLED:true}
+
+  short-code:
+    strategy: ${SHORT_CODE_STRATEGY:sequence}

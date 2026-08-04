@@ -1,9 +1,6 @@
 package com.backendsystemdesignlab.urlshortener.service;
 
-import com.backendsystemdesignlab.urlshortener.generator.SequenceBase62Generator;
-import com.backendsystemdesignlab.urlshortener.generator.ShortCodeGenerationContext;
-import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
-import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
+import com.backendsystemdesignlab.urlshortener.creation.ShortUrlCreationStrategy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,21 +14,13 @@ import java.net.URI;
 @Transactional(readOnly = true)
 public class ShortUrlService {
 
-    private final ShortUrlRepository shortUrlRepository;
-    private final SequenceBase62Generator sequenceBase62Generator;
+    private final ShortUrlCreationStrategy shortUrlCreationStrategy;
 
     @Transactional
     public String createShortUrl(String longUrl) {
         validateUrl(longUrl);
 
-        ShortUrl shortUrl = ShortUrl.create(longUrl);
-        ShortUrl savedShortUrl = shortUrlRepository.save(shortUrl);
-
-        String shortCode = sequenceBase62Generator.generate(ShortCodeGenerationContext.sequece(longUrl, savedShortUrl.getId()));
-
-        savedShortUrl.assignShortCode(shortCode);
-
-        return shortCode;
+        return shortUrlCreationStrategy.create(longUrl);
     }
 
     private void validateUrl(String longUrl) {

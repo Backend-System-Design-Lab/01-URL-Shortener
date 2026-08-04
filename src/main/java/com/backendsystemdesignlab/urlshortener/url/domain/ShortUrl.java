@@ -30,8 +30,22 @@ public class ShortUrl {
         this.createdAt = LocalDateTime.now();
     }
 
+    private ShortUrl(String shortCode, String longUrl) {
+        this.shortCode = shortCode;
+        this.longUrl = longUrl;
+        this.createdAt = LocalDateTime.now();
+    }
+
     public static ShortUrl create(String longUrl) {
         return new ShortUrl(longUrl);
+    }
+
+    public static ShortUrl create(String shortCode, String longUrl) {
+        if (shortCode == null || shortCode.isBlank()) {
+            throw new IllegalArgumentException("단축 코드는 비어 있을 수 없습니다.");
+        }
+
+        return new ShortUrl(shortCode, longUrl);
     }
 
     public void assignShortCode(String shortCode) {

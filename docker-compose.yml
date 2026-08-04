@@ -24,6 +24,8 @@ services:
 
       DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
 
+      SHORT_CODE_STRATEGY: ${SHORT_CODE_STRATEGY:-sequence}
+
     depends_on:
       mysql:
         condition: service_healthy
