@@ -1,6 +1,7 @@
 package com.backendsystemdesignlab.urlshortener.service;
 
 import com.backendsystemdesignlab.urlshortener.generator.SequenceBase62Generator;
+import com.backendsystemdesignlab.urlshortener.generator.ShortCodeGenerationContext;
 import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
 import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +27,7 @@ public class ShortUrlService {
         ShortUrl shortUrl = ShortUrl.create(longUrl);
         ShortUrl savedShortUrl = shortUrlRepository.save(shortUrl);
 
-        String shortCode = sequenceBase62Generator.generate(longUrl, savedShortUrl.getId());
+        String shortCode = sequenceBase62Generator.generate(ShortCodeGenerationContext.sequece(longUrl, savedShortUrl.getId()));
 
         savedShortUrl.assignShortCode(shortCode);
 
