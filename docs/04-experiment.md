@@ -450,35 +450,59 @@ DB Only보다 약 2.16배 높은 전체 평균 처리량과 낮은 p95를 기록
 
 ## 16. 단축 코드 생성 전략 비교
 
-Sequence ID + Base62 방식과 SHA-256 Hash + Base62 방식의
-단축 URL 생성 성능을 비교했다.
+단축 코드 생성 방식에 따른 생성 API 성능을 비교했다.
 
-두 방식 모두 Platform Thread, HikariCP 최대 커넥션 10개,
-20 VU, 1분 조건에서 측정했으며,
+- Sequence ID + Base62
+- SHA-256 Hash + Base62
+- Snowflake ID + Base62
+
+모든 전략은 Platform Thread, HikariCP 최대 커넥션 10개,
+20 VU, 1분 조건에서 측정했다.
 실제 신규 생성 경로를 실행하기 위해 요청마다 서로 다른 URL을 사용했다.
 
-| 지표 | Sequence + Base62 | Hash + Base62 |
-|---|---:|---:|
-| 요청 수 | 97,495 | 77,933 |
-| RPS | 1,624.60 | 1,298.60 |
-| 평균 응답 시간 | 12.12ms | 15.18ms |
-| p95 | 22.23ms | 30.14ms |
-| 최대 응답 시간 | 254.82ms | 467.43ms |
-| 실패율 | 0% | 0% |
+| 지표 | Sequence + Base62 | Hash + Base62 | Snowflake + Base62 |
+|---|---:|---:|---:|
+| 요청 수 | 97,495 | 77,933 | 99,631 |
+| RPS | 1,624.60 | 1,298.60 | 1,660.20 |
+| 평균 응답 시간 | 12.12ms | 15.18ms | 11.85ms |
+| p95 | 22.23ms | 30.14ms | 21.52ms |
+| 최대 응답 시간 | 254.82ms | 467.43ms | 274.23ms |
+| 실패율 | 0% | 0% | 0% |
 
-이번 측정에서 Sequence 방식은 Hash 방식보다 RPS가 약 25.1% 높았고,
-평균 응답 시간과 p95도 더 낮았다.
+각 전략의 저장 흐름은 다음과 같다.
 
-현재 구현에서 Sequence 방식은 `INSERT → ID 발급 → short_code UPDATE`를 수행한다.
-Hash 방식은 `중복 코드 조회 → SHA-256 계산 → INSERT`를 수행하며,
-저장 충돌 재시도를 위해 저장 트랜잭션을 분리했다.
+```text
+Sequence
+INSERT → Auto Increment ID 발급 → Base62 → UPDATE
 
-**로컬 단일 MySQL 환경에서는 충돌 검사와 재시도가 필요 없는
-Sequence + Base62 방식이 더 단순하고 높은 처리량을 보였다.
-따라서 현재 기본 생성 전략으로 Sequence 방식을 유지한다.**
+Hash
+중복 코드 SELECT → SHA-256 → Base62 → INSERT
 
-다만 전략별 한 번만 측정했으며,
-해시 연산과 DB 조회·트랜잭션 비용을 각각 분리해 측정하지는 않았다.
+Snowflake
+분산 ID 생성 → Base62 → INSERT
+```
+Snowflake 방식은 단일 실행에서 가장 높은 RPS와
+가장 낮은 평균·p95 응답 시간을 기록했다.
+
+Sequence 방식도 Snowflake 방식과 비슷한 성능을 보였지만,
+DB에서 ID를 발급받은 후 short_code를 갱신하기 때문에
+생성 요청마다 INSERT와 UPDATE가 발생한다.
+
+Hash 방식은 충돌 확인을 위한 조회와 저장 재시도 처리가 필요해
+세 전략 중 가장 낮은 처리량과 가장 높은 응답 지연을 기록했다.
+
+Snowflake 방식은 DB ID 발급이나 사전 충돌 조회 없이
+한 번의 INSERT로 저장할 수 있다는 장점이 있다.
+다만 서버별 nodeId 관리, 시스템 시간 역행 처리,
+생성기 동기화와 같은 운영 고려사항이 추가된다.
+
+현재 단일 MySQL 환경에서는 Sequence 방식이 가장 단순하다.
+다중 애플리케이션 인스턴스로 확장할 경우에는
+DB Auto Increment 의존성이 없는 Snowflake 방식을 적용할 수 있다.
+
+단, 전략별 한 번만 측정했으며 Sequence와 Snowflake의 차이가 작으므로
+이번 결과만으로 Snowflake의 성능 우위를 일반화할 수는 없다.
+
 
 ## 17. 실험 한계
 
@@ -491,6 +515,8 @@ Sequence + Base62 방식이 더 단순하고 높은 처리량을 보였다.
 - 고정 VU 및 단계적 VU 증가 방식에서는 응답 시간이 짧을수록 더 많은 요청이 발생한다.
 - Stress Test의 k6 최종 결과는 모든 VU 구간을 합산한 값이므로, 특정 VU 구간의 값은 Grafana 시계열을 통해 판단했다.
 - Redis Stress Test의 처리량 한계가 애플리케이션, Redis 또는 로컬 환경 중 어디에서 발생했는지는 추가로 분리하지 않았다.
+- 단축 코드 생성 전략도 조건별 한 번만 측정해 Sequence와 Snowflake의 작은 차이가 실행 환경의 변동인지 확인하지 못했다.
+- Snowflake 전략은 단일 애플리케이션 인스턴스에서만 실행했으며, 서로 다른 nodeId를 사용하는 다중 인스턴스 환경은 검증하지 않았다.
 
 ## 18. 후속 실험
 
@@ -501,5 +527,4 @@ Sequence + Base62 방식이 더 단순하고 높은 처리량을 보였다.
 - [x] Platform Thread와 Virtual Thread 비교
 - [x] HikariCP Pool 크기 비교
 - [x] 더 높은 VU로 Stress Test 수행
-- [x] Sequence ID + Base62와 Hash + 충돌 처리 비교
-- [ ] 분산 ID + Base62 비교
+- [x] Sequence ID + Base62, Hash, Snowflake ID + Base62 비교

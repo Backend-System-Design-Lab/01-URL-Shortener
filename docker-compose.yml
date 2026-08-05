@@ -25,6 +25,7 @@ services:
       DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
 
       SHORT_CODE_STRATEGY: ${SHORT_CODE_STRATEGY:-sequence}
+      SHORT_CODE_NODE_ID: ${SHORT_CODE_NODE_ID:-1}
 
     depends_on:
       mysql:
