@@ -30,8 +30,6 @@ class RedirectServiceTest {
     @Mock
     private ShortUrlRepository shortUrlRepository;
     @Mock
-    private Base62Encoder base62Encoder;
-    @Mock
     private RedirectMetrics redirectMetrics;
 
     @Test
@@ -47,8 +45,8 @@ class RedirectServiceTest {
         assertThat(result).isEqualTo(longUrl);
 
         then(shortUrlCache).should().find(shortCode);
-        then(base62Encoder).shouldHaveNoInteractions();
         then(shortUrlRepository).shouldHaveNoInteractions();
+        then(redirectMetrics).shouldHaveNoInteractions();
     }
 
     @Test
@@ -62,10 +60,7 @@ class RedirectServiceTest {
         given(shortUrlCache.find(shortCode))
                 .willReturn(Optional.empty());
 
-        given(base62Encoder.decode(shortCode))
-                .willReturn(id);
-
-        given(shortUrlRepository.findById(id))
+        given(shortUrlRepository.findByShortCode(shortCode))
                 .willReturn(Optional.of(shortUrl));
 
         String result = redirectService.findLongUrl(shortCode);
@@ -73,30 +68,27 @@ class RedirectServiceTest {
         assertThat(result).isEqualTo(longUrl);
 
         then(shortUrlCache).should().find(shortCode);
-        then(base62Encoder).should().decode(shortCode);
-        then(shortUrlRepository).should().findById(id);
+        then(redirectMetrics).should().recordDbLookup();
+        then(shortUrlRepository).should().findByShortCode(shortCode);
         then(shortUrlCache).should().save(shortCode, longUrl);
     }
 
     @Test
     void 캐시와_DB에_URL이_없으면_예외가_발생한다() {
         String shortCode = "2TX";
-        long id = 12345L;
 
         given(shortUrlCache.find(shortCode))
                 .willReturn(Optional.empty());
 
-        given(base62Encoder.decode(shortCode))
-                .willReturn(id);
-
-        given(shortUrlRepository.findById(id))
+        given(shortUrlRepository.findByShortCode(shortCode))
                 .willReturn(Optional.empty());
 
         assertThatThrownBy(() -> redirectService.findLongUrl(shortCode))
                 .isInstanceOf(ShortUrlNotFoundException.class);
 
         then(shortUrlCache).should().find(shortCode);
-        then(shortUrlRepository).should().findById(id);
+        then(redirectMetrics).should().recordDbLookup();
+        then(shortUrlRepository).should().findByShortCode(shortCode);
         then(shortUrlCache).shouldHaveNoMoreInteractions();
     }
 }

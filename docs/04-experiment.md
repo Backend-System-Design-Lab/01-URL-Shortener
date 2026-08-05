@@ -448,7 +448,39 @@ DB Only보다 약 2.16배 높은 전체 평균 처리량과 낮은 p95를 기록
 
 ![Redis Stress Test](images/stress-redis.png)
 
-## 16. 실험 한계
+## 16. 단축 코드 생성 전략 비교
+
+Sequence ID + Base62 방식과 SHA-256 Hash + Base62 방식의
+단축 URL 생성 성능을 비교했다.
+
+두 방식 모두 Platform Thread, HikariCP 최대 커넥션 10개,
+20 VU, 1분 조건에서 측정했으며,
+실제 신규 생성 경로를 실행하기 위해 요청마다 서로 다른 URL을 사용했다.
+
+| 지표 | Sequence + Base62 | Hash + Base62 |
+|---|---:|---:|
+| 요청 수 | 97,495 | 77,933 |
+| RPS | 1,624.60 | 1,298.60 |
+| 평균 응답 시간 | 12.12ms | 15.18ms |
+| p95 | 22.23ms | 30.14ms |
+| 최대 응답 시간 | 254.82ms | 467.43ms |
+| 실패율 | 0% | 0% |
+
+이번 측정에서 Sequence 방식은 Hash 방식보다 RPS가 약 25.1% 높았고,
+평균 응답 시간과 p95도 더 낮았다.
+
+현재 구현에서 Sequence 방식은 `INSERT → ID 발급 → short_code UPDATE`를 수행한다.
+Hash 방식은 `중복 코드 조회 → SHA-256 계산 → INSERT`를 수행하며,
+저장 충돌 재시도를 위해 저장 트랜잭션을 분리했다.
+
+**로컬 단일 MySQL 환경에서는 충돌 검사와 재시도가 필요 없는
+Sequence + Base62 방식이 더 단순하고 높은 처리량을 보였다.
+따라서 현재 기본 생성 전략으로 Sequence 방식을 유지한다.**
+
+다만 전략별 한 번만 측정했으며,
+해시 연산과 DB 조회·트랜잭션 비용을 각각 분리해 측정하지는 않았다.
+
+## 17. 실험 한계
 
 - 로컬 Docker 환경에서 실행했다.
 - k6, 애플리케이션, MySQL, Redis가 같은 장비의 자원을 사용했다.
@@ -460,7 +492,7 @@ DB Only보다 약 2.16배 높은 전체 평균 처리량과 낮은 p95를 기록
 - Stress Test의 k6 최종 결과는 모든 VU 구간을 합산한 값이므로, 특정 VU 구간의 값은 Grafana 시계열을 통해 판단했다.
 - Redis Stress Test의 처리량 한계가 애플리케이션, Redis 또는 로컬 환경 중 어디에서 발생했는지는 추가로 분리하지 않았다.
 
-## 17. 후속 실험
+## 18. 후속 실험
 
 - [x] Redis Cache Aside 적용
 - [x] Redis 적용 전후 부하 테스트
@@ -469,8 +501,5 @@ DB Only보다 약 2.16배 높은 전체 평균 처리량과 낮은 p95를 기록
 - [x] Platform Thread와 Virtual Thread 비교
 - [x] HikariCP Pool 크기 비교
 - [x] 더 높은 VU로 Stress Test 수행
-- [ ] 조건별 3회 측정 후 중앙값 비교
-- [ ] 단축 코드 생성 전략 비교
-  - Sequence ID + Base62
-  - Hash + 충돌 처리
-  - 분산 ID + Base62
+- [x] Sequence ID + Base62와 Hash + 충돌 처리 비교
+- [ ] 분산 ID + Base62 비교
