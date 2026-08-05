@@ -60,3 +60,4 @@ app:
 
   short-code:
     strategy: ${SHORT_CODE_STRATEGY:sequence}
+    node-id: ${SHORT_CODE_NODE_ID:1}
