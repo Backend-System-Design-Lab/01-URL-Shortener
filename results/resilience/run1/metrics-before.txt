@@ -1,0 +1,16 @@
+# HELP short_url_cache_error_total Redis cache operation error count
+# TYPE short_url_cache_error_total counter
+short_url_cache_error_total{application="url-shortener",operation="get"} 0.0
+short_url_cache_error_total{application="url-shortener",operation="set"} 0.0
+# HELP short_url_cache_fallback_total MySQL fallback count caused by Redis errors
+# TYPE short_url_cache_fallback_total counter
+short_url_cache_fallback_total{application="url-shortener"} 0.0
+# HELP short_url_cache_hit_total Redis cache hit count
+# TYPE short_url_cache_hit_total counter
+short_url_cache_hit_total{application="url-shortener"} 0.0
+# HELP short_url_cache_miss_total Redis cache miss count
+# TYPE short_url_cache_miss_total counter
+short_url_cache_miss_total{application="url-shortener"} 1.0
+# HELP short_url_db_lookup_total Short URL database lookup count
+# TYPE short_url_db_lookup_total counter
+short_url_db_lookup_total{application="url-shortener"} 1.0

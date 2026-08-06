@@ -6,8 +6,8 @@
 * 가장 중요한 비기능 요구사항: 단축 코드 유일성, 읽기 성능, 확장 가능성
 * 설계에서 우선한 요소: 단순한 초기 구조와 측정 가능한 베이스라인
 * 감수한 트레이드오프: 초기에는 모든 조회 요청이 MySQL에 집중된다.
-* 초기 코드 생성 전략: 순차 ID 기반 Base62
-* 최종 코드 생성 전략: Hash 충돌 해소 및 난수 Base62 방식과 비교한 뒤 결정한다.
+* 초기 코드 생성 전략: Sequence ID + Base62
+* 최종 설계: 단일 인스턴스에서는 Sequence를 기본으로 사용하고, 다중 인스턴스에서는 Snowflake 적용을 검토한다.
 
 ## 2. 전체 아키텍처
 
@@ -15,19 +15,24 @@
 flowchart LR
     Client[Client]
     API[Spring Boot API]
+    Redis[(Redis)]
     DB[(MySQL)]
-    Metrics[Prometheus]
-    Dashboard[Grafana]
-    LoadTest[k6]
+    Prometheus[Prometheus]
+    Grafana[Grafana]
+    k6[k6]
 
     Client --> API
+    API --> Redis
     API --> DB
-    Metrics --> API
-    Dashboard --> Metrics
-    LoadTest --> API
+    Prometheus --> API
+    Grafana --> Prometheus
+    k6 --> API
 ```
 
-초기 구조에는 Redis와 Message Broker를 포함하지 않는다.
+MySQL은 원본 데이터를 보관하는 Source of Truth이며,
+Redis는 리다이렉트 조회 성능을 위한 보조 저장소로 사용한다.
+
+Redis Cache Miss 또는 연결 실패 시 MySQL을 조회한다.
 
 ```text
 요구사항 정의
@@ -47,6 +52,7 @@ flowchart LR
 | Prometheus | 애플리케이션 지표 수집      | 현재는 단일 인스턴스                     | 성능 지표 수집 불가 |
 | Grafana    | 성능 지표 시각화         | 현재는 단일 인스턴스                     | 대시보드 조회 불가  |
 | k6         | 부하 테스트 실행         | VU 단계적 증가                       | 서비스에는 영향 없음 |
+| Redis | 원본 URL 조회 캐시 | Sentinel, Cluster | 장애 시 MySQL Fallback으로 지연 증가 |
 
 ## 4. 요청 흐름
 
@@ -60,24 +66,26 @@ flowchart LR
 
 ### URL 리다이렉트
 
-1. 클라이언트가 단축 코드로 요청한다.
-2. API 서버가 Base62 코드를 숫자 ID로 변환한다.
-3. MySQL에서 ID를 이용해 원본 URL을 조회한다.
-4. 원본 URL을 `302 Found`로 반환한다.
+1. `shortCode`로 Redis를 조회한다.
+2. Cache Hit이면 원본 URL을 반환한다.
+3. Cache Miss이면 MySQL의 `short_code` 인덱스로 조회하고 Redis에 저장한다.
+4. Redis 조회에 실패하면 MySQL로 Fallback한다.
+5. 원본 URL을 `302 Found`로 반환한다.
 
 ### 실패 흐름
 
 1. URL 형식이 잘못된 경우 `400 Bad Request`를 반환한다.
 2. 단축 코드 형식이 잘못됐거나 데이터를 찾을 수 없으면 `404 Not Found`를 반환한다.
-3. DB 연결에 실패하면 `503 Service Unavailable`을 반환한다.
+3. DB 연결에 실패하면 `503 Service Unavailable`을 반환한다. 
+4. Redis 연결에 실패하면 MySQL 조회로 전환한다.
 
 ## 5. 데이터 모델
 
 ### 주요 엔티티
 
-| 엔티티      | 주요 필드                  | 설명                   |
-| -------- | ---------------------- | -------------------- |
-| ShortUrl | id, longUrl, createdAt | 원본 URL과 생성 정보를 저장한다. |
+| 엔티티 | 주요 필드 | 설명 |
+|---|---|---|
+| ShortUrl | id, shortCode, longUrl, createdAt | 단축 코드와 원본 URL을 저장한다. |
 
 ### 관계
 
@@ -87,18 +95,14 @@ flowchart LR
 erDiagram
     SHORT_URL {
         BIGINT id PK
+        VARCHAR short_code UK
         VARCHAR long_url
         DATETIME created_at
     }
 ```
 
-초기 구조에서는 단축 코드를 별도 컬럼에 저장하지 않는다.
-
-```text
-shortCode = Base62(id)
-```
-
-Redirect 요청에서는 단축 코드를 다시 ID로 변환해 Primary Key로 조회한다.
+모든 생성 전략이 동일한 조회 경로를 사용하도록 `short_code`에 Unique Index를 적용했다.
+Base62의 대소문자를 구분하기 위해 `ascii_bin` Collation을 사용한다.
 
 Hash와 난수 Base62 방식에서는 생성된 코드를 저장해야 하므로 이후 `short_code` 컬럼과 Unique Index를 사용하는 별도 구조를 적용한다.
 
@@ -106,8 +110,8 @@ Hash와 난수 Base62 방식에서는 생성된 코드를 저장해야 하므로
 
 | Method | Endpoint       | 설명                | 멱등성 |
 | ------ | -------------- | ----------------- | --- |
-| POST   | `/api/v1/urls` | 긴 URL을 단축 URL로 변환 | No  |
-| GET    | `/{shortCode}` | 원본 URL로 리다이렉트     | Yes |
+| POST | `/api/v1/data/shorten` | 긴 URL을 단축 URL로 변환 | 전략에 따라 다름 |
+| GET | `/api/v1/{shortCode}` | 원본 URL로 리다이렉트 | Yes |
 
 동일한 원본 URL을 여러 번 요청하면 서로 다른 단축 URL이 생성될 수 있다.
 
@@ -189,20 +193,9 @@ Redirect 요청이 계속 서버에 전달되므로 301보다 서버 부하가 �
 
 | 전략              | 생성 방식                          | 주요 확인 항목              |
 | --------------- | ------------------------------ | --------------------- |
-| Sequence Base62 | Auto Increment ID를 Base62로 변환  | 처리량, 조회 성능, 예측 가능성    |
-| Hash 충돌 해소      | URL Hash를 Base62로 표현하고 7자리로 제한 | 충돌 수, DB 조회 수, 재시도 횟수 |
-| Random Base62   | 난수 기반 고정 길이 코드 생성              | 충돌 수, 확장성, 예측 가능성     |
-
-Hash 방식은 다음 순서로 동작한다.
-
-```text
-원본 URL
-→ SHA-256 Hash
-→ Hash 결과를 Base62로 표현
-→ 7자리 코드 생성
-→ 중복 확인
-→ 충돌 시 다시 생성
-```
+| Sequence + Base62 | INSERT → ID 발급 → UPDATE | 단순하고 충돌 없음 |
+| Hash + Base62 | 중복 조회 → SHA-256 → INSERT | 고정 길이, 충돌 재시도 필요 |
+| Snowflake + Base62 | 분산 ID 생성 → INSERT | DB ID 비의존, nodeId 관리 필요 |
 
 초기 구현은 Sequence Base62로 진행하고, 이후 세 방식의 RPS, p95, DB 조회 수와 충돌 횟수를 비교한다.
 
@@ -224,12 +217,19 @@ Hash와 난수 방식에서는 `short_code`에 Unique Constraint를 적용해 �
 | DB 장애         | URL 생성 및 조회 불가 | Connection 오류, Actuator | 503 반환, DB 복구      |
 | Prometheus 장애 | 지표 수집 불가       | Scrape 상태               | 컨테이너 재시작           |
 | Grafana 장애    | 대시보드 조회 불가     | 컨테이너 상태                 | 컨테이너 재시작           |
+| Redis 장애 | 응답 지연 및 DB 부하 증가 | Cache Error, Fallback 지표 | MySQL Fallback 후 자동 복귀 |
 
 초기 구조에서는 DB 장애 시 요청을 처리할 대체 저장소가 없다.
 
+Redis GET에 실패하면 MySQL로 Fallback한다.
+
+Redis 장애가 확인된 요청에서는 Redis SET을 생략해 Timeout이 중복되지 않도록 했다.
+
+이는 기능 지속을 위한 Graceful Degradation이며 Redis 자체의 고가용성을 구성한 것은 아니다.
+
 ## 11. 단일 장애 지점
 
-* 현재 존재하는 SPOF: Spring Boot 단일 인스턴스, MySQL 단일 인스턴스
+* 현재 존재하는 SPOF: Spring Boot 단일 인스턴스, MySQL, Redis
 * 프로젝트 범위에서 허용한 이유: 로컬 환경에서 초기 구조의 병목을 확인하기 위한 실험이기 때문이다.
 * 운영 환경에서의 개선 방법: Load Balancer, 다중 API 서버, MySQL Replica와 장애 조치 구성
 
@@ -251,8 +251,6 @@ Prometheus와 Grafana도 단일 인스턴스지만 서비스 요청 처리에는
 
 ### 캐시 확장
 
-초기 구조에서는 캐시를 사용하지 않는다.
-
 부하 테스트를 통해 DB 조회 병목이 확인되면 Redis Cache-Aside를 적용한다.
 
 ```text
@@ -262,9 +260,11 @@ Client
 → Cache Miss 시 MySQL
 ```
 
-* 캐시 키: `short-url:{shortCode}`
-* 만료 정책: TTL 기반
-* Cache Stampede 대응: TTL Jitter 또는 요청 병합
+- 전략: Redis Cache Aside
+- 키: `short-url:{shortCode}`
+- TTL: 1시간
+- Redis 장애: MySQL Fallback
+- 한계: 장애 중 DB 부하와 응답 지연 증가
 
 ## 13. 보안
 
@@ -293,6 +293,8 @@ Client
 * HikariCP Pending Connection
 * 코드 충돌 횟수
 * 코드 생성 재시도 횟수
+* Redis Cache Error 수
+* MySQL Fallback 수
 
 ### Logs
 
