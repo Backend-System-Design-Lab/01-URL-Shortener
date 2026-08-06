@@ -1,0 +1,8 @@
+test_start=2026-08-06T16:30:14+09:00
+short_code=pV0
+vus=100
+duration=120s
+redis_stopped=2026-08-06T16:30:44+09:00
+redis_started=2026-08-06T16:31:14+09:00
+redis_ready=2026-08-06T16:31:15+09:00
+test_end=2026-08-06T16:32:15+09:00

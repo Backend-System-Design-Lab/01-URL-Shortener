@@ -1,0 +1,8 @@
+test_start=2026-08-06T11:45:05+09:00
+short_code=pUZ
+vus=100
+duration=90s
+redis_stopped=2026-08-06T11:45:35+09:00
+redis_started=2026-08-06T11:46:05+09:00
+redis_ready=2026-08-06T11:46:06+09:00
+test_end=2026-08-06T11:46:37+09:00

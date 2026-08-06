@@ -43,7 +43,7 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 | FR-004 | 서로 다른 URL에 동일한 단축 코드를 할당하지 않는다.                     | Must   |
 | FR-005 | 유효하지 않은 URL 입력에는 400 응답을 반환한다.                      | Must   |
 | FR-006 | 존재하지 않는 단축 코드에는 404 응답을 반환한다.                       | Must   |
-| FR-007 | Hash, 순차 ID 기반 Base62, 난수 Base62 생성 방식을 비교한다.       | Should |
+| FR-007 | Sequence, Hash, Snowflake 기반 Base62 생성 방식을 비교한다. | Should |
 | FR-008 | Redis를 적용해 반복적인 원본 URL 조회를 캐시한다.                    | Should |
 | FR-009 | Bloom Filter 또는 Negative Cache로 잘못된 코드의 반복 조회를 줄인다. | Could  |
 | FR-010 | 사용자가 생성된 URL을 수정하거나 삭제하는 기능은 제공하지 않는다.              | Won't  |
@@ -70,9 +70,11 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 
 ### 가용성
 
-* Redis 장애 시 MySQL 조회로 우회한다.
-* 캐시 데이터가 유실되어도 원본 URL을 복구할 수 있어야 한다.
-* 초기 구조의 단일 장애 지점은 Spring Boot, MySQL, Redis이다.
+- Redis 조회 실패 시 MySQL 원본 저장소로 Fallback한다.
+- Redis 장애 중에도 리다이렉트 요청의 오류율을 1% 미만으로 유지한다.
+- Redis 복구 후 Cache Aside 조회 경로로 자동 복귀한다.
+- 캐시 데이터가 유실돼도 MySQL을 통해 원본 URL을 복구할 수 있어야 한다.
+- 현재 구조의 단일 장애 지점은 Spring Boot, MySQL, Redis이다.
 
 ### 확장성
 
@@ -109,7 +111,7 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 * Redis Cache-Aside
 * k6 부하 테스트
 * 개선 전후 동일 조건 재측정
-* Redis 장애 및 Hot Key 실험
+* Redis 장애 시 MySQL Fallback 실험
 
 ### 제외
 

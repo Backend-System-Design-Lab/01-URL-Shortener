@@ -503,8 +503,51 @@ DB Auto Increment 의존성이 없는 Snowflake 방식을 적용할 수 있다.
 단, 전략별 한 번만 측정했으며 Sequence와 Snowflake의 차이가 작으므로
 이번 결과만으로 Snowflake의 성능 우위를 일반화할 수는 없다.
 
+## 17. Redis 장애 시 MySQL Fallback
 
-## 17. 실험 한계
+Redis 장애가 리다이렉트 전체 장애로 이어지지 않도록
+Redis GET 실패 시 MySQL로 전환하는 Fallback을 적용했다.
+
+| 항목 | 조건 |
+|---|---|
+| VU | 100 |
+| 실행 시간 | 120초 |
+| 정상 | 0~30초 |
+| Redis 중지 | 30~60초 |
+| 복구 관찰 | 60~120초 |
+| Redis Timeout | 200ms |
+| HikariCP | 최대 10개 |
+
+### 결과
+
+| 지표 | 결과 |
+|---|---:|
+| 요청 수 | 656,623 |
+| 평균 RPS | 5,471.30 |
+| 평균 응답 시간 | 18.09ms |
+| 전체 p95 | 31.92ms |
+| 최대 응답 시간 | 345.44ms |
+| 실패율 | 0% |
+
+Redis 장애 구간에는 GET Error, MySQL Fallback과 DB Lookup이 함께 증가했다.
+장애 구간의 p95는 약 200ms, p99는 약 220ms까지 증가했지만
+5xx 오류는 발생하지 않았다.
+
+Redis 복구 후 Error, Fallback과 DB Lookup은 다시 0으로 감소했고,
+Cache Hit와 응답시간도 정상 수준으로 복귀했다.
+
+이를 통해 Redis 장애 시 성능 저하를 감수하면서 기능을 유지하고,
+Redis 복구 후 Cache Aside 경로로 자동 전환되는 것을 확인했다.
+
+현재는 모든 요청이 Redis Timeout을 기다린 뒤 Fallback하므로,
+향후 Circuit Breaker를 적용하면 장애 구간의 반복 대기를 줄일 수 있다.
+
+![Redis 장애 성능 지표](images/redis-fallback-100vu-performance.png)
+
+![Redis 장애 캐시 및 DB 지표](images/redis-fallback-100vu-cache-db.png)
+
+
+## 18. 실험 한계
 
 - 로컬 Docker 환경에서 실행했다.
 - k6, 애플리케이션, MySQL, Redis가 같은 장비의 자원을 사용했다.
@@ -517,8 +560,10 @@ DB Auto Increment 의존성이 없는 Snowflake 방식을 적용할 수 있다.
 - Redis Stress Test의 처리량 한계가 애플리케이션, Redis 또는 로컬 환경 중 어디에서 발생했는지는 추가로 분리하지 않았다.
 - 단축 코드 생성 전략도 조건별 한 번만 측정해 Sequence와 Snowflake의 작은 차이가 실행 환경의 변동인지 확인하지 못했다.
 - Snowflake 전략은 단일 애플리케이션 인스턴스에서만 실행했으며, 서로 다른 nodeId를 사용하는 다중 인스턴스 환경은 검증하지 않았다.
+- Redis 장애 실험은 프로세스 중지만 재현했으며 네트워크 지연과 패킷 손실은 검증하지 않았다.
+- Redis 장애 중 더 높은 부하에서는 MySQL과 커넥션 풀이 포화될 수 있다.
 
-## 18. 후속 실험
+## 19. 후속 실험
 
 - [x] Redis Cache Aside 적용
 - [x] Redis 적용 전후 부하 테스트
@@ -528,3 +573,7 @@ DB Auto Increment 의존성이 없는 Snowflake 방식을 적용할 수 있다.
 - [x] HikariCP Pool 크기 비교
 - [x] 더 높은 VU로 Stress Test 수행
 - [x] Sequence ID + Base62, Hash, Snowflake ID + Base62 비교
+- [x] Redis 장애 시 MySQL Fallback 및 자동 복구 검증
+- [ ] Circuit Breaker를 통한 Redis 장애 구간 Timeout 감소
+- [ ] Redis Sentinel 또는 Cluster 기반 고가용성 구성
+- [ ] 다중 애플리케이션 인스턴스와 장애 전환 검증
