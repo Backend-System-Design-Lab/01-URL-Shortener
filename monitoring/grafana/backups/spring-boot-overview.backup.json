@@ -4,23 +4,25 @@
   "metadata": {
     "name": "spring-boot-overview",
     "namespace": "default",
-    "uid": "9f5e1718-e0de-4b16-82e0-fb1fdb5f47b9",
-    "resourceVersion": "1786000355142018",
-    "generation": 1,
-    "creationTimestamp": "2026-08-06T07:12:35Z",
+    "uid": "d8ff4239-0696-483e-ac21-919126fd4967",
+    "resourceVersion": "1785489867760013",
+    "generation": 4,
+    "creationTimestamp": "2026-07-30T10:33:40Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "96116541288448"
+      "grafana.app/deprecatedInternalID": "2113606437945344"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
-      "grafana.app/folder": "cfu8feuqxi7lsb",
+      "grafana.app/folder": "eftnup4o0j1tsd",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "System Design Dashboards",
-      "grafana.app/sourceChecksum": "0737391e824d48cce503bc64fcc70134",
+      "grafana.app/sourceChecksum": "dd3f2ae3957746d44c447391e659a68b",
       "grafana.app/sourcePath": "/var/lib/grafana/dashboards/spring-boot-overview.json",
-      "grafana.app/sourceTimestamp": "1786000349000",
+      "grafana.app/sourceTimestamp": "1785489862000",
+      "grafana.app/updatedBy": "access-policy:service",
+      "grafana.app/updatedTimestamp": "2026-07-31T09:24:27Z",
       "grafana.app/folderTitle": "System Design",
-      "grafana.app/folderUrl": "/dashboards/f/cfu8feuqxi7lsb/system-design"
+      "grafana.app/folderUrl": "/dashboards/f/eftnup4o0j1tsd/system-design"
     }
   },
   "spec": {
@@ -687,149 +689,6 @@
                       }
                     ]
                   }
-                },
-                "overrides": []
-              },
-              "options": {
-                "annotations": {
-                  "clustering": -1,
-                  "multiLane": false
-                },
-                "legend": {
-                  "calcs": [],
-                  "displayMode": "list",
-                  "enableFacetedFilter": false,
-                  "overflow": "ellipsis",
-                  "placement": "bottom",
-                  "showLegend": true
-                },
-                "tooltip": {
-                  "hideZeros": false,
-                  "mode": "single",
-                  "sort": "none"
-                }
-              }
-            },
-            "version": "13.1.1"
-          }
-        }
-      },
-      "panel-14": {
-        "kind": "Panel",
-        "spec": {
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "prometheus"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "rate(\n  short_url_cache_error_total{\n    application=\"url-shortener\",\n    operation=\"get\"\n  }[$__rate_interval]\n)",
-                        "legendFormat": "Redis GET Error/s",
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "A"
-                  }
-                },
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "hidden": false,
-                    "query": {
-                      "datasource": {
-                        "name": "prometheus"
-                      },
-                      "group": "prometheus",
-                      "kind": "DataQuery",
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "rate(\n  short_url_cache_fallback_total{\n    application=\"url-shortener\"\n  }[$__rate_interval]\n)",
-                        "instant": false,
-                        "legendFormat": "MySQL Fallback/s",
-                        "range": true
-                      },
-                      "version": "v0"
-                    },
-                    "refId": "B"
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "description": "",
-          "id": 14,
-          "links": [],
-          "title": "Redis Error / Fallback",
-          "vizConfig": {
-            "group": "timeseries",
-            "kind": "VizConfig",
-            "spec": {
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "palette-classic"
-                  },
-                  "custom": {
-                    "axisBorderShow": false,
-                    "axisCenteredZero": false,
-                    "axisColorMode": "text",
-                    "axisLabel": "",
-                    "axisPlacement": "auto",
-                    "barAlignment": 0,
-                    "barWidthFactor": 0.6,
-                    "drawStyle": "line",
-                    "fillOpacity": 0,
-                    "gradientMode": "none",
-                    "hideFrom": {
-                      "legend": false,
-                      "tooltip": false,
-                      "viz": false
-                    },
-                    "insertNulls": false,
-                    "lineInterpolation": "linear",
-                    "lineWidth": 1,
-                    "pointSize": 5,
-                    "scaleDistribution": {
-                      "type": "linear"
-                    },
-                    "showPoints": "auto",
-                    "showValues": false,
-                    "spanNulls": false,
-                    "stacking": {
-                      "group": "A",
-                      "mode": "none"
-                    },
-                    "thresholdsStyle": {
-                      "mode": "off"
-                    }
-                  },
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": 0
-                      },
-                      {
-                        "color": "red",
-                        "value": 80
-                      }
-                    ]
-                  },
-                  "unit": "reqps"
                 },
                 "overrides": []
               },
@@ -1989,21 +1848,8 @@
                 "name": "panel-10"
               },
               "height": 8,
-              "width": 12,
+              "width": 24,
               "x": 0,
-              "y": 24
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-14"
-              },
-              "height": 8,
-              "width": 12,
-              "x": 12,
               "y": 24
             }
           },
