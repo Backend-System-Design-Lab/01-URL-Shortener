@@ -77,6 +77,10 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 - 단일 App 장애 시 Nginx가 다른 App 인스턴스로 GET 요청을 전환한다.
 - 현재 서비스 경로의 단일 장애 지점은 Nginx와 MySQL이며, Redis 장애는 MySQL Fallback으로 기능을 유지한다.
 - Redis 장애가 반복되면 Circuit Breaker가 Redis 호출을 차단해 반복적인 Timeout을 줄인다.
+- Redis 요청 실패 시 MySQL Fallback을 통해 리다이렉트 기능을 유지한다.
+- Redis 장애가 반복되면 Circuit Breaker가 Redis 호출을 차단해 반복적인 Timeout을 줄인다.
+- Redis Master 장애 시 Sentinel이 Replica를 새로운 Master로 승격한다.
+- Failover가 진행되는 동안 Circuit Breaker와 MySQL Fallback으로 사용자 요청을 처리한다.
 
 ### 확장성
 
@@ -117,6 +121,8 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 * 다중 애플리케이션 인스턴스 및 Nginx Failover 실험
 * 다중 인스턴스 Snowflake nodeId 검증
 * Redis Circuit Breaker 적용 및 장애 구간 응답 지연 비교
+* Redis Sentinel 기반 Master·Replica 구성
+* Redis Master 장애와 자동 Failover 검증
 
 ### 제외
 
@@ -145,3 +151,6 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 * [ ] 다중 인스턴스에서 서로 다른 nodeId로 단축 코드 유일성을 검증했다.
 * [ ] 단일 App 장애 시 다른 인스턴스로 요청이 전환되는 것을 확인했다.
 * [ ] Redis 장애 시 Circuit Breaker를 통해 반복적인 Redis Timeout을 줄였다.
+* [ ] Redis Master 장애 시 Sentinel이 Replica를 자동 승격한다.
+* [ ] Failover 과정에서도 리다이렉트 요청 실패율 0%를 유지한다.
+* [ ] Failover 이후 Redis Cache 조회 경로가 자동 복구된다.

@@ -721,6 +721,106 @@ Timeout 비용을 줄이는 역할을 한다.
 
 ![Redis Circuit Breaker](images/redis-circuit-breaker-100vu.png)
 
+## 20. Redis Sentinel 자동 Failover
+
+Circuit Breaker와 MySQL Fallback을 통해 Redis 장애 중에도
+서비스 요청을 처리할 수 있었지만, Redis 자체는 단일 인스턴스로 남아 있었다.
+
+Redis 계층의 자동 복구를 검증하기 위해
+1개의 Master, 2개의 Replica, 3개의 Sentinel로 구성된
+Redis Sentinel 환경을 구축했다.
+
+```text
+                   Spring Boot
+                        |
+                  Sentinel x 3
+                        |
+                 Current Master
+                  /     |     \
+             Redis   Redis   Redis
+```
+
+Sentinel은 Master 장애를 감지하면 Replica 중 하나를 새로운 Master로
+승격하고, Spring Boot의 Lettuce 클라이언트는 Sentinel을 통해
+변경된 Master를 다시 탐색하도록 구성했다.
+
+### 실험 조건
+
+| 항목 | 값 |
+|---|---:|
+| VU | 100 |
+| 실행 시간 | 120초 |
+| Master 중단 | 실행 30초 후 |
+| 기존 Master 재시작 | 실행 약 60초 후 |
+| Redis 노드 | 3개 |
+| Sentinel | 3개 |
+| Sentinel quorum | 2 |
+| down-after-milliseconds | 5초 |
+| Redis Timeout | 200ms |
+
+### 장애 전환 결과
+
+실험 시작 당시 Sentinel이 관리하는 Master는
+`redis-replica-1`이었다.
+
+실행 30초 후 현재 Master를 강제로 중단했고,
+Sentinel은 `redis-replica-2`를 새로운 Master로 승격했다.
+
+| 지표 | 결과 |
+|---|---:|
+| 기존 Master | redis-replica-1 |
+| 새로운 Master | redis-replica-2 |
+| Sentinel Failover 시간 | 8.567초 |
+| 총 요청 수 | 938,870 |
+| 처리량 | 7,823.30 req/s |
+| 평균 응답시간 | 12.65ms |
+| p95 | 23.72ms |
+| 최대 응답시간 | 1.98s |
+| 요청 실패율 | 0% |
+| Redirect 검증 성공률 | 100% |
+
+Master 장애 직후 Redis 연결 실패가 발생하면서
+Circuit Breaker Rejected와 MySQL Fallback이 증가했다.
+
+이 구간에서는 Redis 대신 MySQL이 요청을 처리했으며
+5xx 오류는 발생하지 않았다.
+
+이후 Sentinel이 약 8.6초 만에 Replica를 새로운 Master로 승격했고,
+애플리케이션이 새로운 Redis Master에 다시 연결되면서
+Circuit Breaker Rejected와 Fallback은 감소하고
+Cache Hit 경로가 자동으로 복구됐다.
+
+```text
+Redis Master 장애
+        |
+        v
+Circuit Breaker OPEN
+        |
+        +----> MySQL Fallback
+        |          |
+        |          +----> 사용자 요청 지속
+        |
+        v
+Sentinel 장애 감지
+        |
+        v
+Replica -> Master 승격
+        |
+        v
+Lettuce 새 Master 탐색
+        |
+        v
+Redis Cache 자동 복구
+```
+
+따라서 Circuit Breaker와 Fallback은 Redis Failover가 진행되는
+공백 구간에서 사용자 요청을 보호하고,
+Sentinel은 Redis 계층 자체를 자동 복구하는 역할을 담당한다.
+
+#### Grafana 측정 결과
+
+![Redis Sentinel Failover](images/redis-sentinel-failover-100vu.png)
+
 ## 19. 실험 한계
 
 - 로컬 Docker 환경에서 실행했다.
@@ -738,6 +838,12 @@ Timeout 비용을 줄이는 역할을 한다.
 - 다중 인스턴스 실험은 로컬 Docker 환경에서 App 2개와 Nginx 1개로 수행했으며, 실제 독립 서버 장애를 재현한 것은 아니다.
 - Circuit Breaker의 상태 전환은 Rejected 지표를 통해 간접적으로 확인했으며,
   CLOSED, OPEN, HALF_OPEN 상태 자체를 별도 메트릭으로 기록하지 않았다.
+- Sentinel, Redis 노드가 모두 동일한 Docker Desktop 호스트에서 실행됐기 때문에
+    독립적인 Failure Domain을 구성한 실제 운영 환경의 HA와는 차이가 있다.
+- p95는 23.72ms로 유지됐지만 Failover 과정에서 최대 1.98초의
+  tail latency가 발생했다.
+- Redis Sentinel은 자동 Failover를 제공하지만 데이터 Sharding을 제공하지 않으므로,
+  Redis 단일 노드의 저장 용량 또는 처리량 한계를 해결하기 위한 구조는 아니다.
 
 ## 20. 후속 실험
 
@@ -752,4 +858,4 @@ Timeout 비용을 줄이는 역할을 한다.
 - [x] Redis 장애 시 MySQL Fallback 및 자동 복구 검증
 - [x] 다중 애플리케이션 인스턴스와 장애 전환 검증
 - [x] Circuit Breaker를 통한 Redis 장애 구간 Timeout 감소
-- [ ] Redis Sentinel 또는 Cluster 기반 고가용성 구성
+- [x] Redis Sentinel 기반 자동 Failover 검증
