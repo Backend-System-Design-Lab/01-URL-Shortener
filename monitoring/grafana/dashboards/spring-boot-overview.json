@@ -4,7 +4,26 @@
   "metadata": {
     "name": "spring-boot-overview",
     "namespace": "default",
-    "uid": "9f5e1718-e0de-4b16-82e0-fb1fdb5f47b9"
+    "uid": "9f5e1718-e0de-4b16-82e0-fb1fdb5f47b9",
+    "resourceVersion": "1786074716204019",
+    "generation": 3,
+    "creationTimestamp": "2026-08-06T07:12:35Z",
+    "labels": {
+      "grafana.app/deprecatedInternalID": "96116541288448"
+    },
+    "annotations": {
+      "grafana.app/createdBy": "access-policy:service",
+      "grafana.app/folder": "system-design",
+      "grafana.app/managedBy": "classic-file-provisioning",
+      "grafana.app/managerId": "System Design Dashboards",
+      "grafana.app/sourceChecksum": "2a0fb7954a76a3c3df21deb5e3d2d830",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/spring-boot-overview.json",
+      "grafana.app/sourceTimestamp": "1786074605000",
+      "grafana.app/updatedBy": "access-policy:service",
+      "grafana.app/updatedTimestamp": "2026-08-07T03:51:56Z",
+      "grafana.app/folderTitle": "System Design",
+      "grafana.app/folderUrl": "/dashboards/f/system-design/system-design"
+    }
   },
   "spec": {
     "annotations": [
@@ -716,7 +735,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(\n  short_url_cache_error_total{\n    application=\"url-shortener\",\n    operation=\"get\"\n  }[$__rate_interval]\n)",
+                        "expr": "rate(\n  short_url_cache_error_total{\n    application=\"url-shortener\",\n    operation=\"get\"\n  }[10s]\n)",
                         "legendFormat": "Redis GET Error/s",
                         "range": true
                       },
@@ -737,7 +756,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(\n  short_url_cache_fallback_total{\n    application=\"url-shortener\"\n  }[$__rate_interval]\n)",
+                        "expr": "rate(\n  short_url_cache_fallback_total{\n    application=\"url-shortener\"\n  }[10s]\n)",
                         "instant": false,
                         "legendFormat": "MySQL Fallback/s",
                         "range": true
@@ -813,6 +832,126 @@
                     ]
                   },
                   "unit": "reqps"
+                },
+                "overrides": []
+              },
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "enableFacetedFilter": false,
+                  "overflow": "ellipsis",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.1.1"
+          }
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(short_url_cache_circuit_rejected_total[10s])",
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 15,
+          "links": [],
+          "title": "Redis Circuit Breaker Rejected",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 0,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  }
                 },
                 "overrides": []
               },
@@ -1852,24 +1991,11 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-1"
-              },
-              "height": 8,
-              "width": 8,
-              "x": 0,
-              "y": 0
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
                 "name": "panel-2"
               },
               "height": 8,
               "width": 8,
-              "x": 8,
+              "x": 0,
               "y": 0
             }
           },
@@ -1882,47 +2008,8 @@
               },
               "height": 8,
               "width": 8,
-              "x": 16,
-              "y": 0
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-4"
-              },
-              "height": 8,
-              "width": 8,
-              "x": 0,
-              "y": 8
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-5"
-              },
-              "height": 8,
-              "width": 8,
               "x": 8,
-              "y": 8
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-6"
-              },
-              "height": 8,
-              "width": 8,
-              "x": 16,
-              "y": 8
+              "y": 0
             }
           },
           {
@@ -1934,8 +2021,21 @@
               },
               "height": 8,
               "width": 8,
+              "x": 16,
+              "y": 0
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-14"
+              },
+              "height": 8,
+              "width": 8,
               "x": 0,
-              "y": 16
+              "y": 8
             }
           },
           {
@@ -1948,6 +2048,32 @@
               "height": 8,
               "width": 8,
               "x": 8,
+              "y": 8
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-15"
+              },
+              "height": 8,
+              "width": 8,
+              "x": 16,
+              "y": 8
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-4"
+              },
+              "height": 8,
+              "width": 8,
+              "x": 0,
               "y": 16
             }
           },
@@ -1956,7 +2082,20 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-9"
+                "name": "panel-5"
+              },
+              "height": 8,
+              "width": 8,
+              "x": 8,
+              "y": 16
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-6"
               },
               "height": 8,
               "width": 8,
@@ -1969,10 +2108,10 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-10"
+                "name": "panel-1"
               },
               "height": 8,
-              "width": 12,
+              "width": 8,
               "x": 0,
               "y": 24
             }
@@ -1982,11 +2121,11 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-14"
+                "name": "panel-13"
               },
               "height": 8,
-              "width": 12,
-              "x": 12,
+              "width": 8,
+              "x": 8,
               "y": 24
             }
           },
@@ -1995,7 +2134,20 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-11"
+                "name": "panel-9"
+              },
+              "height": 8,
+              "width": 8,
+              "x": 16,
+              "y": 24
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-10"
               },
               "height": 8,
               "width": 8,
@@ -2021,7 +2173,7 @@
             "spec": {
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-13"
+                "name": "panel-11"
               },
               "height": 8,
               "width": 8,

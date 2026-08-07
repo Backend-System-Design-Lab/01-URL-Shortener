@@ -76,6 +76,7 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 - 캐시 데이터가 유실돼도 MySQL을 통해 원본 URL을 복구할 수 있어야 한다.
 - 단일 App 장애 시 Nginx가 다른 App 인스턴스로 GET 요청을 전환한다.
 - 현재 서비스 경로의 단일 장애 지점은 Nginx와 MySQL이며, Redis 장애는 MySQL Fallback으로 기능을 유지한다.
+- Redis 장애가 반복되면 Circuit Breaker가 Redis 호출을 차단해 반복적인 Timeout을 줄인다.
 
 ### 확장성
 
@@ -115,6 +116,7 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 * Redis 장애 시 MySQL Fallback 실험
 * 다중 애플리케이션 인스턴스 및 Nginx Failover 실험
 * 다중 인스턴스 Snowflake nodeId 검증
+* Redis Circuit Breaker 적용 및 장애 구간 응답 지연 비교
 
 ### 제외
 
@@ -142,3 +144,4 @@ URL Shortener는 긴 URL을 짧은 코드로 변환하고, 단축 URL 요청이 
 * [ ] 코드 생성 전략별 장단점과 트레이드오프를 설명할 수 있다.
 * [ ] 다중 인스턴스에서 서로 다른 nodeId로 단축 코드 유일성을 검증했다.
 * [ ] 단일 App 장애 시 다른 인스턴스로 요청이 전환되는 것을 확인했다.
+* [ ] Redis 장애 시 Circuit Breaker를 통해 반복적인 Redis Timeout을 줄였다.

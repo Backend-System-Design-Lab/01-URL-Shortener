@@ -619,6 +619,107 @@ App1 재기동 후 Healthy 상태로 복구됐으며
 시스템 전체의 SPOF를 제거한 것은 아니다.
 이번 실험은 애플리케이션 계층의 단일 장애 지점을 개선하는 데 범위를 한정한다.
 
+## 19. Redis Circuit Breaker
+
+Redis 장애 시 MySQL Fallback을 적용해 서비스 가용성은 유지했지만,
+각 요청이 Redis Timeout을 기다린 뒤 MySQL로 전환되면서
+장애 구간 p95가 약 200ms까지 증가하는 문제가 남았다.
+
+Redis 장애가 지속될 때 반복적인 Timeout을 줄이기 위해
+Redis GET 경로에 Circuit Breaker를 적용했다.
+
+### 설정
+
+| 항목 | 값 |
+|---|---:|
+| Sliding Window | 최근 10건 |
+| 최소 호출 수 | 5건 |
+| 실패율 임계값 | 50% |
+| OPEN 유지 시간 | 5초 |
+| HALF_OPEN 시험 호출 | 3건 |
+| Redis Timeout | 200ms |
+
+```text
+CLOSED
+→ Redis 호출 허용
+
+Redis 실패율 임계값 초과
+→ OPEN
+→ Redis 호출 차단
+→ MySQL Fallback
+
+OPEN 5초 경과
+→ HALF_OPEN
+→ Redis 시험 호출
+
+Redis 복구 확인
+→ CLOSED
+→ Cache Aside 경로 복귀
+```
+
+### 실험 조건
+
+Fallback-only 실험과 동일한 조건으로 측정했다.
+
+| 항목 | 조건 |
+|---|---|
+| VU | 100 |
+| 실행 시간 | 120초 |
+| 정상 구간 | 0~30초 |
+| Redis 중지 | 30~60초 |
+| 복구 관찰 | 60~120초 |
+| Redis Timeout | 200ms |
+| HikariCP | 최대 10개 |
+
+### 결과
+
+Redis 장애 직후에는 실제 Redis 호출 실패가 발생하지만,
+실패가 누적되면서 Circuit Breaker가 OPEN 상태로 전환된다.
+
+OPEN 이후에는 Redis 호출 자체가 차단되고
+요청은 즉시 MySQL Fallback 경로로 처리됐다.
+
+Grafana에서 Circuit Breaker Rejected는 최대 약 5.7K req/s,
+MySQL Fallback은 약 5.8K req/s까지 증가했으며,
+5xx 오류는 발생하지 않았다.
+
+장애 구간의 p95는 초기 약 35ms를 기록한 뒤
+대체로 20~30ms 수준으로 유지됐다.
+Fallback만 적용했을 때 장애 구간 p95가 약 200ms였던 것과 비교하면,
+반복적인 Redis Timeout 대기가 크게 감소했다.
+
+Redis 복구 후에는 Circuit Breaker Rejected,
+MySQL Fallback과 DB Lookup이 다시 0으로 감소했고
+Cache Hit이 증가하면서 정상 조회 경로로 복귀했다.
+
+### Fallback-only 비교
+
+| 지표 | Fallback only | Circuit Breaker |
+|---|---:|---:|
+| VU | 100 | 100 |
+| Redis Timeout | 200ms | 200ms |
+| Redis 장애 시간 | 30초 | 30초 |
+| 장애 구간 p95 | 약 200ms | 약 20~30ms |
+| 장애 구간 p99 | 약 220ms | 약 40~80ms |
+| 5xx 오류율 | 0% | 0% |
+| Redis 호출 | 장애 중 반복 | OPEN 이후 차단 |
+| MySQL Fallback | 발생 | 발생 |
+| Redis 복구 후 Cache 복귀 | 성공 | 성공 |
+
+Fallback만 적용했을 때는 Redis 장애가 전체 서비스 장애로
+이어지는 것은 막을 수 있었지만,
+각 요청이 Redis Timeout을 기다린 뒤 DB를 조회하는 문제가 남았다.
+
+Circuit Breaker 적용 후에는 장애를 감지한 뒤 Redis 호출을 차단해
+MySQL을 바로 조회하도록 변경했다.
+
+따라서 Fallback은 Redis 장애 시 기능을 유지하고,
+Circuit Breaker는 장애가 지속되는 동안 반복적인 Redis 호출과
+Timeout 비용을 줄이는 역할을 한다.
+
+#### Grafana 측정 결과
+
+![Redis Circuit Breaker](images/redis-circuit-breaker-100vu.png)
 
 ## 19. 실험 한계
 
@@ -635,6 +736,8 @@ App1 재기동 후 Healthy 상태로 복구됐으며
 - Redis 장애 실험은 프로세스 중지만 재현했으며 네트워크 지연과 패킷 손실은 검증하지 않았다.
 - Redis 장애 중 더 높은 부하에서는 MySQL과 커넥션 풀이 포화될 수 있다.
 - 다중 인스턴스 실험은 로컬 Docker 환경에서 App 2개와 Nginx 1개로 수행했으며, 실제 독립 서버 장애를 재현한 것은 아니다.
+- Circuit Breaker의 상태 전환은 Rejected 지표를 통해 간접적으로 확인했으며,
+  CLOSED, OPEN, HALF_OPEN 상태 자체를 별도 메트릭으로 기록하지 않았다.
 
 ## 20. 후속 실험
 
@@ -648,5 +751,5 @@ App1 재기동 후 Healthy 상태로 복구됐으며
 - [x] Sequence ID + Base62, Hash, Snowflake ID + Base62 비교
 - [x] Redis 장애 시 MySQL Fallback 및 자동 복구 검증
 - [x] 다중 애플리케이션 인스턴스와 장애 전환 검증
-- [ ] Circuit Breaker를 통한 Redis 장애 구간 Timeout 감소
+- [x] Circuit Breaker를 통한 Redis 장애 구간 Timeout 감소
 - [ ] Redis Sentinel 또는 Cluster 기반 고가용성 구성
