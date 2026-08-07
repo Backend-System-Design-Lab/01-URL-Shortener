@@ -5,6 +5,8 @@ import com.backendsystemdesignlab.urlshortener.exception.ShortUrlNotFoundExcepti
 import com.backendsystemdesignlab.urlshortener.metrics.RedirectMetrics;
 import com.backendsystemdesignlab.urlshortener.url.domain.ShortUrl;
 import com.backendsystemdesignlab.urlshortener.url.repository.ShortUrlRepository;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -18,14 +20,20 @@ public class RedirectService {
     private final ShortUrlRepository shortUrlRepository;
     private final ShortUrlCache shortUrlCache;
     private final RedirectMetrics redirectMetrics;
+    private final CircuitBreaker redisCircuitBreaker;
 
     public String findLongUrl(String shortCode) {
         try {
-            Optional<String> cachedLongUrl = shortUrlCache.find(shortCode);
+            Optional<String> cachedLongUrl = redisCircuitBreaker.executeSupplier(() -> shortUrlCache.find(shortCode));
 
             if (cachedLongUrl.isPresent()) {
                 return cachedLongUrl.get();
             }
+        } catch (CallNotPermittedException e) { // Circuit OPEN
+          redirectMetrics.recordCircuitBreakerRejected();
+          redirectMetrics.recordCacheFallback();
+
+          return findFromDatabase(shortCode, false);
         } catch (DataAccessException e) {
             redirectMetrics.recordCacheGetError();
             redirectMetrics.recordCacheFallback();

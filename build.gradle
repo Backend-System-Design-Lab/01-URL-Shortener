@@ -45,6 +45,9 @@ dependencies {
 
 	// Virtual Thread 전용 지표
 	implementation 'io.micrometer:micrometer-java21'
+
+	// 서킷 브레이커
+	implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.4.0'
 }
 
 tasks.named('test') {
