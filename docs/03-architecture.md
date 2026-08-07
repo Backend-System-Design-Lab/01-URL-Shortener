@@ -7,7 +7,8 @@
 * 설계에서 우선한 요소: 단순한 초기 구조와 측정 가능한 베이스라인
 * 감수한 트레이드오프: 초기에는 모든 조회 요청이 MySQL에 집중된다.
 * 초기 코드 생성 전략: Sequence ID + Base62
-* 최종 설계: 단일 인스턴스에서는 Sequence를 기본으로 사용하고, 다중 인스턴스에서는 Snowflake 적용을 검토한다.
+* 최종 코드 생성 전략: 단일 인스턴스에서는 Sequence + Base62를 기본으로 사용하고, 다중 인스턴스에서는 서로 다른 nodeId를 할당한 Snowflake + Base62의 유일성을 검증했다.
+* 장애 대응 전략: 애플리케이션 계층은 Nginx 기반 Failover, Redis 계층은 Circuit Breaker·MySQL Fallback과 Sentinel 기반 자동 Failover를 적용한다.
 
 ## 2. 전체 아키텍처
 
@@ -19,8 +20,15 @@ flowchart LR
     App1[Spring Boot App1<br/>nodeId=1]
     App2[Spring Boot App2<br/>nodeId=2]
 
-    Redis[(Redis)]
     DB[(MySQL)]
+
+    Sentinel1[Sentinel 1]
+    Sentinel2[Sentinel 2]
+    Sentinel3[Sentinel 3]
+
+    RedisMaster[(Current Redis Master)]
+    RedisReplica1[(Redis Replica)]
+    RedisReplica2[(Redis Replica)]
 
     Prometheus[Prometheus]
     Grafana[Grafana]
@@ -32,11 +40,26 @@ flowchart LR
     Nginx --> App1
     Nginx --> App2
 
-    App1 --> Redis
-    App2 --> Redis
-
     App1 --> DB
     App2 --> DB
+
+    App1 -. Master Discovery .-> Sentinel1
+    App1 -. Master Discovery .-> Sentinel2
+    App1 -. Master Discovery .-> Sentinel3
+
+    App2 -. Master Discovery .-> Sentinel1
+    App2 -. Master Discovery .-> Sentinel2
+    App2 -. Master Discovery .-> Sentinel3
+
+    App1 --> RedisMaster
+    App2 --> RedisMaster
+
+    Sentinel1 -. Monitor .-> RedisMaster
+    Sentinel2 -. Monitor .-> RedisMaster
+    Sentinel3 -. Monitor .-> RedisMaster
+
+    RedisMaster --> RedisReplica1
+    RedisMaster --> RedisReplica2
 
     Prometheus --> App1
     Prometheus --> App2
@@ -45,17 +68,27 @@ flowchart LR
 
 Nginx가 클라이언트 요청을 두 개의 Spring Boot 인스턴스로 분산한다.
 
-두 애플리케이션은 상태를 저장하지 않으며 동일한 MySQL과 Redis를 사용한다.
-MySQL은 원본 데이터를 보관하는 Source of Truth이고,
-Redis는 리다이렉트 조회 성능을 위한 보조 저장소다.
+두 애플리케이션은 상태를 저장하지 않으며 동일한 MySQL을 사용한다.
+MySQL은 원본 데이터를 보관하는 Source of Truth이다.
 
-Redis Cache Miss 또는 연결 실패 시 MySQL을 조회한다.
+Redis는 리다이렉트 조회 성능을 위한 보조 저장소이며,
+Master 1개와 Replica 2개를 3개의 Sentinel이 감시한다.
+
+애플리케이션은 Sentinel을 통해 현재 Redis Master를 탐색하고,
+실제 캐시 요청은 현재 Master에 전달한다.
+
+Redis Master 장애 시 Sentinel이 Replica 하나를 새로운 Master로 승격한다.
+Failover가 진행되는 동안 발생하는 Redis 요청 실패는
+Circuit Breaker와 MySQL Fallback을 통해 처리한다.
 
 리다이렉트 GET 요청에서 특정 애플리케이션 연결에 실패하면
 Nginx가 다른 인스턴스로 요청을 재시도한다.
 
 POST 생성 요청은 처리 성공 여부가 불분명한 상태에서 재시도할 경우
 중복 생성 가능성이 있으므로 자동 재시도 대상으로 두지 않는다.
+
+다중 애플리케이션 Failover와 Redis Sentinel Failover는
+각각 별도의 로컬 Docker 환경에서 검증했다.
 
 ## 3. 주요 컴포넌트
 
@@ -67,8 +100,8 @@ POST 생성 요청은 처리 성공 여부가 불분명한 상태에서 재시�
 | Prometheus | 애플리케이션 지표 수집      | 현재는 단일 인스턴스                     | 성능 지표 수집 불가 |
 | Grafana    | 성능 지표 시각화         | 현재는 단일 인스턴스                     | 대시보드 조회 불가  |
 | k6         | 부하 테스트 실행         | VU 단계적 증가                       | 서비스에는 영향 없음 |
-| Redis | 원본 URL 조회 캐시 | Sentinel, Cluster | 장애 시 MySQL Fallback으로 지연 증가 |
-
+| Redis | 원본 URL 조회 캐시 | Sentinel 기반 Master·Replica Failover, 필요 시 Cluster 검토 | Master 장애 시 Sentinel 자동 Failover, 전환 중 MySQL Fallback |
+| Redis Sentinel | Redis Master 감시 및 자동 Failover | Sentinel 3개, quorum 2 | Sentinel 과반수 상실 시 자동 Failover 제한 |
 ## 4. 요청 흐름
 
 ### URL 생성
@@ -81,13 +114,16 @@ POST 생성 요청은 처리 성공 여부가 불분명한 상태에서 재시�
 
 ### URL 리다이렉트
 
-1. Circuit Breaker가 CLOSED이면 `shortCode`로 Redis를 조회한다.
-2. Cache Hit이면 원본 URL을 반환한다.
-3. Cache Miss이면 MySQL의 `short_code` 인덱스로 조회하고 Redis에 저장한다.
-4. Redis 조회에 실패하면 MySQL로 Fallback한다.
-5. Redis 실패가 반복돼 Circuit Breaker가 OPEN되면 Redis 호출을 생략하고 바로 MySQL을 조회한다.
-6. Redis 복구가 확인되면 Circuit Breaker가 CLOSED로 돌아가 Cache Aside 경로를 다시 사용한다.
-7. 원본 URL을 `302 Found`로 반환한다.
+1. 애플리케이션은 Sentinel을 통해 현재 Redis Master를 탐색한다.
+2. Circuit Breaker가 CLOSED이면 `shortCode`로 Redis를 조회한다.
+3. Cache Hit이면 원본 URL을 반환한다.
+4. Cache Miss이면 MySQL의 `short_code` 인덱스로 조회하고 Redis에 저장한다.
+5. Redis 조회에 실패하면 MySQL로 Fallback한다.
+6. Redis 실패가 반복돼 Circuit Breaker가 OPEN되면 Redis 호출을 생략하고 바로 MySQL을 조회한다.
+7. Redis Master 장애 시 Sentinel이 Replica 하나를 새로운 Master로 승격한다.
+8. Lettuce가 Sentinel을 통해 변경된 Master를 탐색한다.
+9. Redis 호출 성공이 확인되면 Circuit Breaker가 CLOSED로 돌아가 Cache Aside 경로를 다시 사용한다.
+10. 원본 URL을 `302 Found`로 반환한다.
 
 ### 실패 흐름
 
@@ -239,19 +275,22 @@ Clock Rollback을 확인했다.
 * 동시성 제어: MySQL Auto Increment로 ID 유일성을 보장한다.
 * 중복 요청 처리: 동일한 원본 URL의 중복 생성을 허용한다.
 * 저장 실패 처리: DB 저장에 실패하면 단축 URL을 반환하지 않는다.
-* DB와 캐시 간 정합성: 초기 구조에서는 캐시를 사용하지 않는다.
-
+* DB와 캐시 간 정합성: MySQL을 Source of Truth로 두고 Redis에는 조회 결과만 캐시한다.
+* Cache Miss 시 MySQL을 조회한 뒤 Redis에 저장한다.
+* Redis 저장 실패는 원본 데이터 정합성에 영향을 주지 않으며 DB 조회 결과를 그대로 반환한다.
+* Redis Master 장애 시 Sentinel이 Replica를 승격하며, Failover 공백 구간에는 MySQL Fallback으로 조회 기능을 유지한다.
 Hash와 난수 방식에서는 `short_code`에 Unique Constraint를 적용해 코드 중복을 방지한다.
 
 ## 10. 장애 대응
 
-| 장애 상황         | 영향             | 감지 방법                   | 대응 방법              |
-| ------------- | -------------- | ----------------------- | ------------------ |
+| 장애 상황 | 영향 | 감지 방법 | 대응 방법 |
+|---|---|---|---|
 | 단일 API 서버 장애 | 해당 인스턴스 처리 중단 | Health Check, Prometheus `up` | Nginx가 다른 App 인스턴스로 요청 전환 |
-| DB 장애         | URL 생성 및 조회 불가 | Connection 오류, Actuator | 503 반환, DB 복구      |
-| Prometheus 장애 | 지표 수집 불가       | Scrape 상태               | 컨테이너 재시작           |
-| Grafana 장애    | 대시보드 조회 불가     | 컨테이너 상태                 | 컨테이너 재시작           |
-| Redis 장애 | 응답 지연 및 DB 부하 증가 | Cache Error, Fallback 지표 | Circuit Breaker OPEN 후 MySQL Fallback |
+| DB 장애 | URL 생성 및 조회 불가 | Connection 오류, Actuator | 503 반환, DB 복구 |
+| Redis 요청 실패 | 응답 지연 및 DB 부하 증가 | Cache Error, Fallback 지표 | Circuit Breaker OPEN 후 MySQL Fallback |
+| Redis Master 장애 | Cache 사용 불가 및 Failover 공백 발생 | Sentinel, Redis 연결 오류 | Replica 자동 승격 후 새 Master로 재연결 |
+| Prometheus 장애 | 지표 수집 불가 | Scrape 상태 | 컨테이너 재시작 |
+| Grafana 장애 | 대시보드 조회 불가 | 컨테이너 상태 | 컨테이너 재시작 |
 
 초기 구조에서는 DB 장애 시 요청을 처리할 대체 저장소가 없다.
 
@@ -266,11 +305,22 @@ Circuit이 OPEN 상태로 전환된다.
 OPEN 상태에서는 Redis GET 자체를 호출하지 않고
 즉시 MySQL로 Fallback한다.
 
-일정 시간이 지난 뒤 제한된 요청으로 Redis 복구 여부를 확인하고,
-정상 응답이 확인되면 다시 Cache Aside 경로로 복귀한다.
+Redis 계층은 Master 1개, Replica 2개와 Sentinel 3개로 구성했다.
 
-이는 기능 지속과 장애 구간의 반복 Timeout을 줄이기 위한
-Graceful Degradation이며 Redis 자체를 이중화한 것은 아니다.
+Master 장애 시 Sentinel quorum을 통해 Replica 하나를 새로운 Master로 승격하고,
+애플리케이션의 Lettuce 클라이언트가 변경된 Master를 다시 탐색한다.
+
+100 VU 환경에서 현재 Redis Master를 강제로 중단한 결과,
+Sentinel은 8.567초 후 `redis-replica-2`를 새로운 Master로 승격했다.
+
+Failover가 진행되는 동안 Circuit Breaker와 MySQL Fallback이 요청을 처리해
+총 938,870건의 리다이렉트 요청에서 실패율 0%를 유지했다.
+
+Failover 이후 Cache Hit이 다시 증가하면서
+Redis 조회 경로가 자동으로 복구되는 것을 확인했다.
+
+Circuit Breaker와 Fallback은 Failover 공백 구간에서 사용자 요청을 보호하고,
+Sentinel은 Redis 계층 자체를 자동 복구하는 역할을 담당한다.
 
 App1 장애 시 Nginx가 App2를 통해 GET 리다이렉트 요청을 계속 처리한다.
 
@@ -281,15 +331,21 @@ App1 복구 후 다시 요청 처리에 참여하는 것을 확인했다.
 ## 11. 단일 장애 지점
 
 * Spring Boot는 App1과 App2로 구성해 단일 애플리케이션 장애 지점을 개선했다.
-* Nginx는 현재 단일 인스턴스이므로 진입 지점의 SPOF로 남아 있다.
-* MySQL은 단일 인스턴스로 구성되어 있어 장애 시 생성 및 조회가 불가능하다.
-* Redis는 단일 인스턴스지만 장애 시 MySQL Fallback을 통해 리다이렉트 기능을 유지할 수 있다.
+* Redis는 Master 1개와 Replica 2개를 구성하고 Sentinel 3개를 통해 단일 Redis 노드 장애에 대한 자동 Failover를 검증했다.
+* Nginx는 현재 단일 인스턴스이므로 외부 요청 진입 지점의 SPOF로 남아 있다.
+* MySQL은 단일 인스턴스로 구성되어 있어 장애 시 URL 생성 및 조회가 불가능하다.
+* Prometheus와 Grafana도 단일 인스턴스지만 서비스 요청 처리에는 직접적인 영향을 주지 않는다.
 
-Prometheus와 Grafana도 단일 인스턴스지만
-서비스 요청 처리에는 직접적인 영향을 주지 않는다.
+Redis 노드와 Sentinel은 모두 동일한 Docker Desktop 호스트에서 실행했기 때문에,
+호스트 자체가 장애 나는 경우 전체 Redis 계층이 함께 영향을 받는다.
 
-운영 환경에서는 Load Balancer 이중화, MySQL Replica와 장애 조치,
-Redis Sentinel 또는 Cluster 등을 추가로 고려할 수 있다.
+따라서 이번 실험은 Redis 프로세스 또는 컨테이너 단위 Failover를 검증한 것이며,
+독립적인 Failure Domain에 배치된 실제 운영 환경 수준의 고가용성을 의미하지 않는다.
+
+운영 환경에서는 Load Balancer 이중화와 MySQL Replica 및 장애 조치를 추가로 고려할 수 있다.
+
+Redis 저장 용량 또는 처리량이 단일 노드의 한계를 초과할 경우에는
+고가용성과 별도로 Redis Cluster 기반 Sharding을 검토할 수 있다.
 
 ## 12. 확장 전략
 
@@ -309,7 +365,8 @@ Redis Sentinel 또는 Cluster 등을 추가로 고려할 수 있다.
 
 ### 캐시 확장
 
-부하 테스트를 통해 DB 조회 병목이 확인되면 Redis Cache-Aside를 적용한다.
+DB Only 부하 테스트에서 반복적인 MySQL 조회가 병목으로 확인돼
+Redis Cache-Aside를 적용했다.
 
 ```text
 Client
@@ -319,10 +376,18 @@ Client
 ```
 
 - 전략: Redis Cache Aside
-- 키: `short-url:{shortCode}`
+- 키: ```short-url:{shortCode}```
 - TTL: 1시간
-- Redis 장애: MySQL Fallback
-- 한계: 장애 중 DB 부하와 응답 지연 증가
+- Redis 요청 실패: Circuit Breaker + MySQL Fallback
+- Redis Master 장애: Sentinel 기반 Replica 자동 승격
+- Source of Truth: MySQL
+- 한계: Failover 공백 구간의 DB 부하 증가와 동일 호스트 Failure Domain
+
+현재 문제는 Redis 저장 용량 부족이 아니라 단일 Master 장애였기 때문에
+Redis Cluster는 적용하지 않았다.
+
+향후 Redis 단일 노드의 저장 용량 또는 처리량이 병목으로 확인되면
+Cluster 기반 Sharding을 검토한다.
 
 ## 13. 보안
 
@@ -354,6 +419,7 @@ Client
 * Redis Cache Error 수
 * MySQL Fallback 수
 * Redis Circuit Breaker Rejected 수
+* Redis Master Failover 소요 시간
 
 ### Logs
 
@@ -361,6 +427,7 @@ Client
 * 주요 이벤트: URL 생성 실패, 조회 실패, DB 오류
 * 오류 로그: 예외 종류와 요청 경로
 * 민감정보 제외 기준: 원본 URL과 Query Parameter 전체를 기록하지 않는다.
+* Sentinel Master 전환 이벤트와 Failover 시작·완료 시각
 
 ### Alerts
 
