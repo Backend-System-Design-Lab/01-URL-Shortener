@@ -14,40 +14,55 @@
 ```mermaid
 flowchart LR
     Client[Client]
-    API[Spring Boot API]
+    Nginx[Nginx]
+
+    App1[Spring Boot App1<br/>nodeId=1]
+    App2[Spring Boot App2<br/>nodeId=2]
+
     Redis[(Redis)]
     DB[(MySQL)]
+
     Prometheus[Prometheus]
     Grafana[Grafana]
     k6[k6]
 
-    Client --> API
-    API --> Redis
-    API --> DB
-    Prometheus --> API
+    Client --> Nginx
+    k6 --> Nginx
+
+    Nginx --> App1
+    Nginx --> App2
+
+    App1 --> Redis
+    App2 --> Redis
+
+    App1 --> DB
+    App2 --> DB
+
+    Prometheus --> App1
+    Prometheus --> App2
     Grafana --> Prometheus
-    k6 --> API
 ```
 
-MySQL은 원본 데이터를 보관하는 Source of Truth이며,
-Redis는 리다이렉트 조회 성능을 위한 보조 저장소로 사용한다.
+Nginx가 클라이언트 요청을 두 개의 Spring Boot 인스턴스로 분산한다.
+
+두 애플리케이션은 상태를 저장하지 않으며 동일한 MySQL과 Redis를 사용한다.
+MySQL은 원본 데이터를 보관하는 Source of Truth이고,
+Redis는 리다이렉트 조회 성능을 위한 보조 저장소다.
 
 Redis Cache Miss 또는 연결 실패 시 MySQL을 조회한다.
 
-```text
-요구사항 정의
-→ MySQL 기반 구조 구현
-→ 부하 테스트
-→ 병목 분석
-→ 구조 개선
-→ 동일 조건 재측정
-```
+리다이렉트 GET 요청에서 특정 애플리케이션 연결에 실패하면
+Nginx가 다른 인스턴스로 요청을 재시도한다.
+
+POST 생성 요청은 처리 성공 여부가 불분명한 상태에서 재시도할 경우
+중복 생성 가능성이 있으므로 자동 재시도 대상으로 두지 않는다.
 
 ## 3. 주요 컴포넌트
 
 | 컴포넌트       | 역할                | 확장 방법                           | 장애 영향       |
 | ---------- | ----------------- | ------------------------------- | ----------- |
-| API Server | URL 생성, 검증, 리다이렉트 | 무상태 서버 수평 확장                    | 요청 처리 불가    |
+| Nginx | 요청 분산 및 App 장애 시 Failover | Load Balancer 이중화 | 장애 시 외부 요청 진입 불가 |
+| API Server | URL 생성, 검증, 리다이렉트 | App1·App2 무상태 수평 확장 | 단일 App 장애 시 다른 인스턴스가 처리 |
 | MySQL      | 원본 URL 영구 저장      | Replica, Partitioning, Sharding | 생성 및 조회 불가  |
 | Prometheus | 애플리케이션 지표 수집      | 현재는 단일 인스턴스                     | 성능 지표 수집 불가 |
 | Grafana    | 성능 지표 시각화         | 현재는 단일 인스턴스                     | 대시보드 조회 불가  |
@@ -199,6 +214,23 @@ Redirect 요청이 계속 서버에 전달되므로 301보다 서버 부하가 �
 
 초기 구현은 Sequence Base62로 진행하고, 이후 세 방식의 RPS, p95, DB 조회 수와 충돌 횟수를 비교한다.
 
+### 다중 인스턴스에서의 Snowflake
+
+다중 인스턴스 환경에서는 각 애플리케이션에 서로 다른 nodeId를 할당했다.
+
+- App1: nodeId=1
+- App2: nodeId=2
+
+애플리케이션 내부에서는 `synchronized`로 timestamp와 sequence 갱신을 보호하고,
+서버 간 ID 충돌은 서로 다른 nodeId를 통해 방지한다.
+
+부하 테스트 중 Docker 환경에서 시스템 시간이 4~8ms 역행하는
+Clock Rollback을 확인했다.
+
+이전 timestamp로 ID를 생성하지 않고,
+작은 시간 역행에서는 마지막 생성 시각까지 시계가 복구되기를 제한된 시간 동안 기다린다.
+허용 범위를 초과하는 시간 역행은 ID 중복 위험을 막기 위해 실패 처리한다.
+
 ## 9. 데이터 정합성
 
 * 트랜잭션 범위: 원본 URL을 MySQL에 저장하는 단일 트랜잭션
@@ -213,7 +245,7 @@ Hash와 난수 방식에서는 `short_code`에 Unique Constraint를 적용해 �
 
 | 장애 상황         | 영향             | 감지 방법                   | 대응 방법              |
 | ------------- | -------------- | ----------------------- | ------------------ |
-| API 서버 장애     | URL 생성 및 조회 불가 | Health Check, HTTP 오류율  | 서버 재시작, 향후 다중 인스턴스 |
+| 단일 API 서버 장애 | 해당 인스턴스 처리 중단 | Health Check, Prometheus `up` | Nginx가 다른 App 인스턴스로 요청 전환 |
 | DB 장애         | URL 생성 및 조회 불가 | Connection 오류, Actuator | 503 반환, DB 복구      |
 | Prometheus 장애 | 지표 수집 불가       | Scrape 상태               | 컨테이너 재시작           |
 | Grafana 장애    | 대시보드 조회 불가     | 컨테이너 상태                 | 컨테이너 재시작           |
@@ -227,21 +259,34 @@ Redis 장애가 확인된 요청에서는 Redis SET을 생략해 Timeout이 중�
 
 이는 기능 지속을 위한 Graceful Degradation이며 Redis 자체의 고가용성을 구성한 것은 아니다.
 
+App1 장애 시 Nginx가 App2를 통해 GET 리다이렉트 요청을 계속 처리한다.
+
+Failover 실험에서 App1을 강제로 중단했지만
+리다이렉트 요청 실패율 0%를 유지했고,
+App1 복구 후 다시 요청 처리에 참여하는 것을 확인했다.
+
 ## 11. 단일 장애 지점
 
-* 현재 존재하는 SPOF: Spring Boot 단일 인스턴스, MySQL, Redis
-* 프로젝트 범위에서 허용한 이유: 로컬 환경에서 초기 구조의 병목을 확인하기 위한 실험이기 때문이다.
-* 운영 환경에서의 개선 방법: Load Balancer, 다중 API 서버, MySQL Replica와 장애 조치 구성
+* Spring Boot는 App1과 App2로 구성해 단일 애플리케이션 장애 지점을 개선했다.
+* Nginx는 현재 단일 인스턴스이므로 진입 지점의 SPOF로 남아 있다.
+* MySQL은 단일 인스턴스로 구성되어 있어 장애 시 생성 및 조회가 불가능하다.
+* Redis는 단일 인스턴스지만 장애 시 MySQL Fallback을 통해 리다이렉트 기능을 유지할 수 있다.
 
-Prometheus와 Grafana도 단일 인스턴스지만 서비스 요청 처리에는 직접적인 영향을 주지 않는다.
+Prometheus와 Grafana도 단일 인스턴스지만
+서비스 요청 처리에는 직접적인 영향을 주지 않는다.
+
+운영 환경에서는 Load Balancer 이중화, MySQL Replica와 장애 조치,
+Redis Sentinel 또는 Cluster 등을 추가로 고려할 수 있다.
 
 ## 12. 확장 전략
 
 ### 애플리케이션 확장
 
-* 여러 Spring Boot 인스턴스를 Load Balancer 뒤에 배치한다.
+* Nginx 뒤에 두 개의 Spring Boot 인스턴스를 배치했다.
 * 애플리케이션 서버에는 세션이나 URL 상태를 저장하지 않는다.
-* 다중 인스턴스 구성은 핵심 실험 이후 검토한다.
+* App1과 App2는 동일한 MySQL과 Redis를 사용한다.
+* Snowflake 사용 시 각 인스턴스에 서로 다른 nodeId를 할당한다.
+* 단일 App 장애 시 Nginx를 통해 다른 인스턴스로 GET 요청을 전환한다.
 
 ### 데이터베이스 확장
 
