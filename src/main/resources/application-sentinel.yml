@@ -1,0 +1,16 @@
+spring:
+  config:
+    activate:
+      on-profile: sentinel
+
+  data:
+    redis:
+      sentinel:
+        master: ${REDIS_SENTINEL_MASTER:url-shortener-master}
+        nodes:
+          - ${REDIS_SENTINEL_NODE_1:sentinel-1:26379}
+          - ${REDIS_SENTINEL_NODE_2:sentinel-2:26379}
+          - ${REDIS_SENTINEL_NODE_3:sentinel-3:26379}
+
+      connect-timeout: 200ms
+      timeout: 200ms

@@ -1,0 +1,262 @@
+services:
+
+  redis-master:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-replica-1:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --replicaof
+      - redis-master
+      - "6379"
+      - --replica-announce-ip
+      - redis-replica-1
+      - --replica-announce-port
+      - "6379"
+      - --appendonly
+      - "no"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    volumes:
+      - redis-replica-1-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-replica-2:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --replicaof
+      - redis-master
+      - "6379"
+      - --replica-announce-ip
+      - redis-replica-2
+      - --replica-announce-port
+      - "6379"
+      - --appendonly
+      - "no"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    volumes:
+      - redis-replica-2-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  sentinel-1:
+    image: redis:7.4-alpine
+    command: >
+      sh -c "
+        cp /etc/redis/sentinel-template.conf /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis/sentinel-template.conf:ro
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-p", "26379", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  sentinel-2:
+    image: redis:7.4-alpine
+    command: >
+      sh -c "
+        cp /etc/redis/sentinel-template.conf /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis/sentinel-template.conf:ro
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-p", "26379", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  sentinel-3:
+    image: redis:7.4-alpine
+    command: >
+      sh -c "
+        cp /etc/redis/sentinel-template.conf /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis/sentinel-template.conf:ro
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-p", "26379", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: url_shortener
+      MYSQL_USER: url_shortener
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: url-shortener:local
+
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: sentinel
+
+      APP_NAME: ${APP_NAME:-url-shortener}
+      VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
+
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-url_shortener}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-url_shortener}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+
+      REDIS_SENTINEL_MASTER: url-shortener-master
+      REDIS_SENTINEL_NODE_1: sentinel-1:26379
+      REDIS_SENTINEL_NODE_2: sentinel-2:26379
+      REDIS_SENTINEL_NODE_3: sentinel-3:26379
+
+      REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-200ms}
+      REDIS_COMMAND_TIMEOUT: ${REDIS_COMMAND_TIMEOUT:-200ms}
+
+      CACHE_ENABLED: ${CACHE_ENABLED:-true}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+
+      SHORT_CODE_STRATEGY: ${SHORT_CODE_STRATEGY:-sequence}
+      SHORT_CODE_NODE_ID: ${SHORT_CODE_NODE_ID:-1}
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+      sentinel-1:
+        condition: service_healthy
+
+      sentinel-2:
+        condition: service_healthy
+
+      sentinel-3:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8080/actuator/health"
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  prometheus:
+    image: prom/prometheus:v3.13.0
+
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+
+    depends_on:
+      app:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:13.1.1-ubuntu
+
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql-data:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:
+  prometheus-data:
+  grafana-data:
