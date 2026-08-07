@@ -46,3 +46,4 @@ out/
 .gradle/
 .idea/
 results/multi-instance/
+results/resilience/circuit-breaker/
