@@ -2,9 +2,7 @@ package com.backendsystemdesignlab.urlshortener.generator;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,5 +65,38 @@ class SnowflakeIdGeneratorTest {
         assertThatThrownBy(
                 () -> new SnowflakeIdGenerator(1024L)
         ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 작은_시간_역행은_복구를_기다린다() {
+        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L) {
+            private final Queue<Long> times = new ArrayDeque<>(List.of(1_000L, 995L, 998L, 1_000L));
+
+            @Override
+            protected long currentTimeMillis() {
+                return times.remove();
+            }
+        };
+
+        long first = generator.nextId();
+        long second = generator.nextId();
+
+        assertNotEquals(first, second);
+    }
+
+    @Test
+    void 큰_시간_역행은_ID_생성을_중단한다() {
+        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L) {
+            private final Queue<Long> times = new ArrayDeque<>(List.of(1_000L, 900L));
+
+            @Override
+            protected long currentTimeMillis() {
+                return times.remove();
+            }
+        };
+
+        generator.nextId();
+
+        assertThrows(IllegalStateException.class, generator::nextId);
     }
 }

@@ -56,7 +56,7 @@ seq 1 "${REQUESTS}" |
       curl -sS \
         -D "${RUN_DIR}/responses/${index}.headers" \
         -o "${RUN_DIR}/responses/${index}.json" \
-        -w "%{http_code}" \
+        -w "%{http_code}\n" \
         -X POST "${BASE_URL}/api/v1/data/shorten" \
         -H "Content-Type: application/json" \
         -d "{
