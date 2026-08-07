@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 @Component
 public class SnowflakeIdGenerator {
@@ -30,6 +32,8 @@ public class SnowflakeIdGenerator {
     private long lastTimestamp = -1L; // 마지막 생성 시각
     private long sequence = 0L; // 같은 밀리초 안에서의 순번
 
+    private static final long MAX_CLOCK_BACKWARD_MILLIS = 20L;
+
     public SnowflakeIdGenerator(@Value("${app.short-code.node-id:1}") long nodeId) {
         if (nodeId < 0 || nodeId > MAX_NODE_ID) {
             throw new IllegalArgumentException("nodeId는 0 이상 " + MAX_NODE_ID + " 이하여야 합니다.");
@@ -43,8 +47,19 @@ public class SnowflakeIdGenerator {
         // 서버가 여러 대라면 서버 간 중복은 서로 다른 nodeId로 방지
         long currentTimestamp = currentTimeMillis();
 
-        if (currentTimestamp < lastTimestamp) { // 원인 : NTP 시간 보정, 가상머신 시간 변경, 서버 시간 수동 변경
-            throw new IllegalStateException("시스템 시간이 이전 시각으로 이동했습니다.");
+        if (currentTimestamp < lastTimestamp) {
+            long backwardMillis = lastTimestamp - currentTimestamp;
+
+            if (backwardMillis > MAX_CLOCK_BACKWARD_MILLIS) {
+                throw new IllegalStateException(
+                        "허용 범위를 초과해 시스템 시간이 이전 시각으로 이동했습니다. "
+                                + "backwardMillis=" + backwardMillis
+                                + ", lastTimestamp=" + lastTimestamp
+                                + ", currentTimestamp=" + currentTimestamp
+                );
+            }
+
+            currentTimestamp = waitUntilRecovered(lastTimestamp);
         }
 
         if (currentTimestamp == lastTimestamp) { // 같은 밀리초 안에서 여러 ID를 만들고 있다
@@ -67,6 +82,30 @@ public class SnowflakeIdGenerator {
         long nodePart = nodeId << NODE_ID_SHIFT;
 
         return timeStampPart | nodePart | sequence;
+    }
+
+    private long waitUntilRecovered(long targetTimestamp) {
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(MAX_CLOCK_BACKWARD_MILLIS);
+        long currentTimestamp = currentTimeMillis();
+
+        while (currentTimestamp < targetTimestamp) {
+            if (System.nanoTime() >= deadlineNanos) {
+                long backwardMillis = targetTimestamp - currentTimestamp;
+
+                throw new IllegalStateException(
+                        "시스템 시간이 제한 시간 내 복구되지 않았습니다. "
+                                + "backwardMillis=" + backwardMillis
+                                + ", lastTimestamp=" + targetTimestamp
+                                + ", currentTimestamp=" + currentTimestamp
+                );
+            }
+
+            LockSupport.parkNanos(100_000L);
+
+            currentTimestamp = currentTimeMillis();
+        }
+
+        return currentTimestamp;
     }
 
     private long waitUntilNextMillis(long timestamp) {

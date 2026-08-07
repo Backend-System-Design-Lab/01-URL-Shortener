@@ -4,24 +4,7 @@
   "metadata": {
     "name": "spring-boot-overview",
     "namespace": "default",
-    "uid": "9f5e1718-e0de-4b16-82e0-fb1fdb5f47b9",
-    "resourceVersion": "1786000355142018",
-    "generation": 1,
-    "creationTimestamp": "2026-08-06T07:12:35Z",
-    "labels": {
-      "grafana.app/deprecatedInternalID": "96116541288448"
-    },
-    "annotations": {
-      "grafana.app/createdBy": "access-policy:service",
-      "grafana.app/folder": "cfu8feuqxi7lsb",
-      "grafana.app/managedBy": "classic-file-provisioning",
-      "grafana.app/managerId": "System Design Dashboards",
-      "grafana.app/sourceChecksum": "0737391e824d48cce503bc64fcc70134",
-      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/spring-boot-overview.json",
-      "grafana.app/sourceTimestamp": "1786000349000",
-      "grafana.app/folderTitle": "System Design",
-      "grafana.app/folderUrl": "/dashboards/f/cfu8feuqxi7lsb/system-design"
-    }
+    "uid": "9f5e1718-e0de-4b16-82e0-fb1fdb5f47b9"
   },
   "spec": {
     "annotations": [

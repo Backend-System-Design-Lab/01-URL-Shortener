@@ -546,8 +546,81 @@ Redis 복구 후 Cache Aside 경로로 자동 전환되는 것을 확인했다.
 
 ![Redis 장애 캐시 및 DB 지표](images/redis-fallback-100vu-cache-db.png)
 
+## 18. 다중 인스턴스 및 Failover
 
-## 18. 실험 한계
+단일 애플리케이션 장애가 전체 서비스 장애로 이어지는 문제를 줄이기 위해
+App 인스턴스를 2개로 확장하고 Nginx를 통해 요청을 분산했다.
+
+### Snowflake 다중 인스턴스
+
+각 인스턴스에 서로 다른 Snowflake nodeId를 할당했다.
+
+| 인스턴스 | nodeId |
+|---|---:|
+| App1 | 1 |
+| App2 | 2 |
+
+동시 생성 테스트에서 Nginx를 통해 두 인스턴스에 요청이 거의 동일하게 분산됐으며,
+생성된 shortCode의 중복 여부를 검증했다.
+
+테스트 과정에서 Snowflake 내부 동시성 문제가 아닌
+시스템 Clock Rollback도 확인했다.
+
+```text
+App1: backwardMillis=8
+App2: backwardMillis=4
+```
+
+이에 작은 시간 역행에서는 이전 timestamp로 ID를 생성하지 않고
+시계가 마지막 생성 시각까지 복구되기를 기다리도록 처리했다.
+큰 시간 역행은 ID 중복 위험을 막기 위해 실패 처리한다.
+
+### 애플리케이션 Failover
+
+100 VU의 리다이렉트 요청을 지속하면서 App1을 강제로 중지한 뒤 다시 실행했다.
+
+| 항목 | 조건 |
+|---|---|
+| VU | 100 |
+| 실행 시간 | 120초 |
+| 정상 구간 | 0~30초 |
+| App1 중지 | 30~60초 |
+| App1 재시작 | 60초 |
+| 요청 | GET Redirect |
+
+### 결과
+
+| 지표 | 결과 |
+|---|---:|
+| 요청 수 | 446,850 |
+| 평균 RPS | 3,723.29 |
+| 평균 응답 시간 | 26.68ms |
+| p95 | 67.40ms |
+| 최대 응답 시간 | 2,922.56ms |
+| 실패율 | 0% |
+| Check 성공률 | 100% |
+
+App1 중지 후 Prometheus의 `up` 값이 0으로 변경됐으며,
+App2가 단독으로 리다이렉트 요청을 처리했다.
+
+App1 장애 중에도 전체 요청의 실패율은 0%를 유지했다.
+App1 재기동 후 Healthy 상태로 복구됐으며
+다시 요청 처리에 참여하는 것도 확인했다.
+
+#### Grafana 측정 결과
+
+![다중 인스턴스 Failover](images/multi-instance-failover.png)
+
+단일 애플리케이션 구조에서는 App 장애가 전체 요청 처리 불가로 이어질 수 있지만,
+두 개의 App 인스턴스와 Nginx를 구성한 뒤에는
+한 인스턴스가 중단되어도 다른 인스턴스가 요청을 계속 처리했다.
+
+다만 Nginx, MySQL은 여전히 단일 인스턴스이므로
+시스템 전체의 SPOF를 제거한 것은 아니다.
+이번 실험은 애플리케이션 계층의 단일 장애 지점을 개선하는 데 범위를 한정한다.
+
+
+## 19. 실험 한계
 
 - 로컬 Docker 환경에서 실행했다.
 - k6, 애플리케이션, MySQL, Redis가 같은 장비의 자원을 사용했다.
@@ -559,11 +632,11 @@ Redis 복구 후 Cache Aside 경로로 자동 전환되는 것을 확인했다.
 - Stress Test의 k6 최종 결과는 모든 VU 구간을 합산한 값이므로, 특정 VU 구간의 값은 Grafana 시계열을 통해 판단했다.
 - Redis Stress Test의 처리량 한계가 애플리케이션, Redis 또는 로컬 환경 중 어디에서 발생했는지는 추가로 분리하지 않았다.
 - 단축 코드 생성 전략도 조건별 한 번만 측정해 Sequence와 Snowflake의 작은 차이가 실행 환경의 변동인지 확인하지 못했다.
-- Snowflake 전략은 단일 애플리케이션 인스턴스에서만 실행했으며, 서로 다른 nodeId를 사용하는 다중 인스턴스 환경은 검증하지 않았다.
 - Redis 장애 실험은 프로세스 중지만 재현했으며 네트워크 지연과 패킷 손실은 검증하지 않았다.
 - Redis 장애 중 더 높은 부하에서는 MySQL과 커넥션 풀이 포화될 수 있다.
+- 다중 인스턴스 실험은 로컬 Docker 환경에서 App 2개와 Nginx 1개로 수행했으며, 실제 독립 서버 장애를 재현한 것은 아니다.
 
-## 19. 후속 실험
+## 20. 후속 실험
 
 - [x] Redis Cache Aside 적용
 - [x] Redis 적용 전후 부하 테스트
@@ -574,6 +647,6 @@ Redis 복구 후 Cache Aside 경로로 자동 전환되는 것을 확인했다.
 - [x] 더 높은 VU로 Stress Test 수행
 - [x] Sequence ID + Base62, Hash, Snowflake ID + Base62 비교
 - [x] Redis 장애 시 MySQL Fallback 및 자동 복구 검증
+- [x] 다중 애플리케이션 인스턴스와 장애 전환 검증
 - [ ] Circuit Breaker를 통한 Redis 장애 구간 Timeout 감소
 - [ ] Redis Sentinel 또는 Cluster 기반 고가용성 구성
-- [ ] 다중 애플리케이션 인스턴스와 장애 전환 검증
