@@ -13,6 +13,7 @@ public class RedirectMetrics {
     private final Counter cacheSetErrorCounter;
     private final Counter cacheFallbackCounter;
     private final Counter dbLookupCounter;
+    private final Counter circuitBreakerRejectedCounter;
 
     public RedirectMetrics(MeterRegistry meterRegistry) {
         this.cacheHitCounter = Counter.builder("short_url.cache.hit")
@@ -40,6 +41,10 @@ public class RedirectMetrics {
         this.dbLookupCounter = Counter.builder("short_url.db.lookup")
                 .description("Short URL database lookup count")
                 .register(meterRegistry);
+
+        this.circuitBreakerRejectedCounter = Counter.builder("short_url.cache.circuit.rejected")
+                .description("Redis calls rejected by circuit breaker")
+                .register(meterRegistry);
     }
 
     public void recordCacheHit() {
@@ -54,4 +59,5 @@ public class RedirectMetrics {
     public void recordDbLookup() {
         dbLookupCounter.increment();
     }
+    public void recordCircuitBreakerRejected() { circuitBreakerRejectedCounter.increment(); }
 }

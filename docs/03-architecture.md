@@ -81,11 +81,13 @@ POST 생성 요청은 처리 성공 여부가 불분명한 상태에서 재시�
 
 ### URL 리다이렉트
 
-1. `shortCode`로 Redis를 조회한다.
+1. Circuit Breaker가 CLOSED이면 `shortCode`로 Redis를 조회한다.
 2. Cache Hit이면 원본 URL을 반환한다.
 3. Cache Miss이면 MySQL의 `short_code` 인덱스로 조회하고 Redis에 저장한다.
 4. Redis 조회에 실패하면 MySQL로 Fallback한다.
-5. 원본 URL을 `302 Found`로 반환한다.
+5. Redis 실패가 반복돼 Circuit Breaker가 OPEN되면 Redis 호출을 생략하고 바로 MySQL을 조회한다.
+6. Redis 복구가 확인되면 Circuit Breaker가 CLOSED로 돌아가 Cache Aside 경로를 다시 사용한다.
+7. 원본 URL을 `302 Found`로 반환한다.
 
 ### 실패 흐름
 
@@ -249,15 +251,26 @@ Hash와 난수 방식에서는 `short_code`에 Unique Constraint를 적용해 �
 | DB 장애         | URL 생성 및 조회 불가 | Connection 오류, Actuator | 503 반환, DB 복구      |
 | Prometheus 장애 | 지표 수집 불가       | Scrape 상태               | 컨테이너 재시작           |
 | Grafana 장애    | 대시보드 조회 불가     | 컨테이너 상태                 | 컨테이너 재시작           |
-| Redis 장애 | 응답 지연 및 DB 부하 증가 | Cache Error, Fallback 지표 | MySQL Fallback 후 자동 복귀 |
+| Redis 장애 | 응답 지연 및 DB 부하 증가 | Cache Error, Fallback 지표 | Circuit Breaker OPEN 후 MySQL Fallback |
 
 초기 구조에서는 DB 장애 시 요청을 처리할 대체 저장소가 없다.
 
 Redis GET에 실패하면 MySQL로 Fallback한다.
 
-Redis 장애가 확인된 요청에서는 Redis SET을 생략해 Timeout이 중복되지 않도록 했다.
+Redis 장애가 확인된 요청에서는 Redis SET을 생략해
+한 요청에서 Redis Timeout이 중복되지 않도록 한다.
 
-이는 기능 지속을 위한 Graceful Degradation이며 Redis 자체의 고가용성을 구성한 것은 아니다.
+Redis 실패가 반복돼 Circuit Breaker의 실패율 임계값을 초과하면
+Circuit이 OPEN 상태로 전환된다.
+
+OPEN 상태에서는 Redis GET 자체를 호출하지 않고
+즉시 MySQL로 Fallback한다.
+
+일정 시간이 지난 뒤 제한된 요청으로 Redis 복구 여부를 확인하고,
+정상 응답이 확인되면 다시 Cache Aside 경로로 복귀한다.
+
+이는 기능 지속과 장애 구간의 반복 Timeout을 줄이기 위한
+Graceful Degradation이며 Redis 자체를 이중화한 것은 아니다.
 
 App1 장애 시 Nginx가 App2를 통해 GET 리다이렉트 요청을 계속 처리한다.
 
@@ -340,6 +353,7 @@ Client
 * 코드 생성 재시도 횟수
 * Redis Cache Error 수
 * MySQL Fallback 수
+* Redis Circuit Breaker Rejected 수
 
 ### Logs
 
