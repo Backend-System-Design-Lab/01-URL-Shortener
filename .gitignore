@@ -45,3 +45,4 @@ out/
 # Build and IDE
 .gradle/
 .idea/
+results/multi-instance/
