@@ -47,3 +47,4 @@ out/
 .idea/
 results/multi-instance/
 results/resilience/circuit-breaker/
+results/sentinel/
