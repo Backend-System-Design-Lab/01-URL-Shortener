@@ -163,13 +163,13 @@ VUS=20 DURATION=1m BASE_URL=http://localhost:8080 \
 상세 실험 스크립트와 결과는 `k6/`, `scripts/`, `docs/04-experiment.md`에서 확인할 수 있습니다.
 
 ## 문서
-| 문서 | 내용 |
-|---|---|
-| [Requirements](docs/01-requirements.md) | 범위와 성공 기준 |
-| [Capacity](docs/02-capacity.md) | 트래픽, 저장량, 예상 병목 |
-| [Architecture](docs/03-architecture.md) | 최종 구조와 설계 판단 |
-| [Experiment](docs/04-experiment.md) | 부하, 병목, 장애 실험 결과 |
-| [Retrospective](docs/05-retrospective.md) | 문제 해결 과정과 면접용 정리 |
+| 문서                                         | 내용 |
+|--------------------------------------------|---|
+| [Requirements](docs/01-requirements.md)    | 범위와 성공 기준 |
+| [Capacity](docs/02-capacity-estimation.md) | 트래픽, 저장량, 예상 병목 |
+| [Architecture](docs/03-architecture.md)    | 최종 구조와 설계 판단 |
+| [Experiment](docs/04-experiment.md)        | 부하, 병목, 장애 실험 결과 |
+| [Retrospective](docs/05-retrospective.md)  | 문제 해결 과정과 면접용 정리 |
 
 ## 후속 과제
 - 조건별 3회 이상 반복 측정 후 중앙값 비교
